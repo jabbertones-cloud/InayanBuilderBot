@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Propose a new capability
+about: Propose a product improvement for deterministic planning or execution bridging
 title: "[Feature] "
 labels: enhancement
 assignees: ''
@@ -8,12 +8,14 @@ assignees: ''
 
 ## Problem
 
-What user problem are we solving?
+What user or operator problem should this solve?
 
-## Proposed solution
+## Proposed Change
 
-## Alternatives considered
+Describe API/UI behavior, expected schema changes, and rollout impact.
 
-## Success criteria
+## Alternatives Considered
 
-How do we know this worked?
+## Success Criteria
+
+How will we measure improved output quality, reliability, or discoverability?

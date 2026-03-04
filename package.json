@@ -2,7 +2,25 @@
   "name": "inayan-builder-bot",
   "version": "1.0.0",
   "private": true,
-  "description": "Inayan Builder Bot: secure project-builder API + dashboard",
+  "description": "Simple-to-install, cheap-to-run AI builder agent with deterministic magic-run planning",
+  "keywords": [
+    "ai builder agent",
+    "deterministic planning",
+    "magic run",
+    "execution-ready blueprint",
+    "github research",
+    "reddit research",
+    "express api",
+    "mcp"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smanthey/InayanBuilderBot.git"
+  },
+  "homepage": "https://github.com/smanthey/InayanBuilderBot#readme",
+  "bugs": {
+    "url": "https://github.com/smanthey/InayanBuilderBot/issues"
+  },
   "type": "module",
   "engines": {
     "node": ">=20.0.0"

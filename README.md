@@ -2,6 +2,8 @@
 
 Production-ready **AI Builder Agent API** that turns idea inputs into **deterministic, execution-ready build plans**.
 
+Simple to install. Cheap to run. Amazing to use. Built to work.
+
 It combines GitHub + Reddit research signals, benchmark scoring, and strict quality gates to produce:
 - executable blueprint artifacts
 - implementation task breakdowns
@@ -19,6 +21,13 @@ Most AI planning tools stop at prompt text. InayanBuilderBot focuses on a narrow
 `Scout -> Benchmark -> Blueprint -> Execution Task List`
 
 with reproducible output structure, evidence citations, and pre-ship quality checks.
+
+## Product Positioning
+
+- **Simple to install**: `npm ci && npm run setup:auto && npm run dev:auto`
+- **Cheap to run**: Node + Express, low infrastructure requirements, optional local-first mode
+- **Amazing to use**: one-click Magic Run and recompile diff flow
+- **Built to work**: strict schemas, proof metrics, tests, CI, and security checks
 
 ## Headline Feature: Deterministic Magic Run
 

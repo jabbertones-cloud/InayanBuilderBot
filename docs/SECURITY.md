@@ -1,25 +1,28 @@
 # Security Model
 
-## Controls Implemented
+## Security Controls
 
-1. HTTP hardening headers with `helmet`
-2. Request rate limiting (`express-rate-limit`)
-3. Input validation via `zod`
-4. Optional API key auth for API endpoints
+1. HTTP hardening via `helmet`
+2. request throttling via `express-rate-limit`
+3. strict Zod input validation
+4. API key auth support for protected endpoints
 5. CORS allowlist via `ALLOWED_ORIGIN`
-6. Sensitive file ignore strategy in `.gitignore`
-7. Repo secret scanner script (`npm run security:check`)
+6. secret scanning via `npm run security:check`
 
 ## Sensitive Data Policy
 
-- Never commit real tokens, keys, passwords, or connection strings.
-- Store runtime secrets in environment variables.
-- Commit only placeholders via `.env.example`.
+- never commit real API keys, tokens, passwords, or DSNs
+- keep runtime secrets in environment variables
+- use `.env.example` placeholders only
 
-## Operational Security Checklist
+## Operator Checklist
 
-- Use strong random `BUILDERBOT_API_KEY`.
-- Restrict `ALLOWED_ORIGIN` in production.
-- Put behind TLS reverse proxy.
-- Run `npm run security:check` before each push.
-- Rotate API keys periodically.
+- set strong `BUILDERBOT_API_KEY`
+- restrict `ALLOWED_ORIGIN` in production
+- run behind TLS/reverse proxy
+- run `npm run security:check` before pushes
+- rotate credentials periodically
+
+## Security Positioning
+
+Security posture is a first-class product feature for enterprise-grade deterministic planning APIs.
