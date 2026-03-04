@@ -12,3 +12,5 @@ dist/
 .vscode/
 .idea/
 *.local
+
+.data/

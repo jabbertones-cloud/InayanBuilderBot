@@ -1,26 +1,24 @@
 # InayanBuilderBot
 
-**InayanBuilderBot is the Masterpiece Agent + Chat Tool.**
+**InayanBuilderBot is the complete Masterpiece Agent + Chat Tool.**
 
 Dedicated to **Suro Jason Inaya**. Built for him personally.
 
-## What It Does
+## Complete Product Scope
 
-InayanBuilderBot gives you a full benchmark-first workflow in one interface:
+This is a robust, working system, not a lite demo. It includes:
 
-1. Scout proven OSS repos for dashboard/chat modules
-2. Benchmark and compare candidates
-3. Generate a Masterpiece build blueprint
-4. Use built-in chat tool for architecture/security/benchmark guidance
+1. Masterpiece pipeline orchestration endpoint
+2. OSS repo scout with quality scoring
+3. Benchmark/compare engine
+4. Masterpiece blueprint generator
+5. Chat tool with context-aware guidance
+6. Persistent run artifacts and history
+7. Security hardening + CI + secret checks
 
-## What It Is Based On
+## Endpoints
 
-- OpenClaw-style benchmark-first build orchestration
-- Repo indexing and comparison before implementation
-- Secure-by-default API and release hygiene
-
-## Core Endpoints
-
+- `POST /api/v1/masterpiece/pipeline/run` (full robust workflow)
 - `POST /api/v1/scout/run`
 - `POST /api/v1/benchmark/run`
 - `POST /api/v1/masterpiece/build`
@@ -28,6 +26,20 @@ InayanBuilderBot gives you a full benchmark-first workflow in one interface:
 - `GET /api/v1/chat/history`
 - `GET /api/v1/runs`
 - `GET /health`
+
+## Robust Pipeline: What It Executes
+
+`/api/v1/masterpiece/pipeline/run` performs:
+
+1. Scout candidate repos from GitHub (or seed repos)
+2. Exclude low-signal framework-only repos
+3. Benchmark and compare top candidates
+4. Optionally execute external OpenClaw indexing/scout stack:
+   - `index:sync:agent`
+   - `repo:readiness:pulse`
+   - `dashboard:repo:scout`
+5. Produce a final build blueprint based on selected top repos
+6. Persist artifacts to `.data/runs.json`
 
 ## Install
 
@@ -38,11 +50,14 @@ npm install
 cp .env.example .env
 ```
 
-Set env values:
+## Configure
 
-- `BUILDERBOT_API_KEY` (strong random value)
-- `ALLOWED_ORIGIN` (exact UI origin)
-- `GITHUB_TOKEN` (optional, improves GitHub API limits)
+Set in `.env`:
+
+- `BUILDERBOT_API_KEY` (recommended for production)
+- `ALLOWED_ORIGIN`
+- `GITHUB_TOKEN` (recommended for GitHub API limit)
+- `CLAW_ARCHITECT_ROOT` (optional, default `/Users/tatsheen/claw-architect`)
 
 ## Run
 
@@ -50,24 +65,24 @@ Set env values:
 npm run dev
 ```
 
-Open `http://localhost:3000`
+Open: `http://localhost:3000`
 
 ## Security
 
 - Helmet headers
-- API payload validation with Zod
 - Rate limiting
-- Optional bearer key auth
-- `.env` never committed
-- `npm run security:check` to prevent secret leakage
+- Strict payload validation (Zod)
+- Optional Bearer auth
+- Secret scan (`npm run security:check`)
+- CI checks on push/PR
 
-## Commands
+## Validation Commands
 
-- `npm run dev`
-- `npm run start`
-- `npm run lint`
-- `npm run security:check`
-- `npm run test`
+```bash
+npm run lint
+npm run security:check
+npm run test
+```
 
 ## Documentation
 
