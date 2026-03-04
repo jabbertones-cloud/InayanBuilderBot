@@ -55,6 +55,11 @@ Related endpoints:
 - `GET /api/v1/projects/:projectKey/memory`
 - `GET /api/v1/product/focus`
 
+Real-system execution mode (`/api/v1/masterpiece/pipeline/run` with `runExternal=true` + `EXTERNAL_INDEXING_MODE=openclaw`) now includes a repo completion stage:
+- `external_release_four_repos_check`
+- emits `release_summary.hard_failures` and `release_summary.env_blocked_checks`
+- emits `dependency_hint` when a repo fails from missing local install dependencies (e.g. missing `vite`)
+
 ## API Surface
 
 ### Masterpiece + Pipeline
@@ -141,6 +146,30 @@ Expected response highlights:
 - `qualityScore: <number>`
 - `timeToFirstWowMs: <number>`
 - `executionBridge.tasks[]` with owner, estimate, dependencies, acceptance criteria
+
+## Example: Real Repo Completion Run
+
+Use this to validate and improve actual repos (not just plan generation):
+
+```bash
+curl -X POST http://localhost:3030/api/v1/masterpiece/pipeline/run \
+  -H 'Content-Type: application/json' \
+  -H 'x-api-key: local-dev-key' \
+  -d '{
+    "productName": "Repo Completion Sweep",
+    "userGoal": "Find hard failures across active repos and classify env-blocked checks",
+    "stack": ["node", "express", "postgres"],
+    "queries": ["repo reliability checks", "dashboard chat ai builder"],
+    "runExternal": true,
+    "runGithubResearch": false,
+    "runRedditResearch": false
+  }'
+```
+
+Look for:
+- `stageResults[].stage == "external_release_four_repos_check"`
+- `stageResults[].detail.release_summary`
+- `stageResults[].detail.dependency_hint`
 
 ## Determinism + Quality Gates
 
