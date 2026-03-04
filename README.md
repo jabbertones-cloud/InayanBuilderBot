@@ -22,6 +22,10 @@ This is a robust, working system, not a lite demo. It includes:
 - `POST /api/v1/scout/run`
 - `POST /api/v1/benchmark/run`
 - `POST /api/v1/masterpiece/build`
+- `GET /api/v1/indexing/capabilities`
+- `POST /api/v1/indexing/sync`
+- `POST /api/v1/indexing/readiness`
+- `POST /api/v1/indexing/dashboard-scout`
 - `POST /api/v1/chat/reply`
 - `POST /api/v1/chat/reply/stream` (SSE)
 - `GET /api/v1/chat/providers`
@@ -171,6 +175,18 @@ EXTERNAL_INDEXING_MODE=builtin
 ```
 
 Then run the normal pipeline endpoint with `runExternal: true` to execute the built-in advanced indexing stage.
+
+## OpenClaw/MCP-Style Git Indexing API
+
+When you want parity with OpenClaw indexing workflow, use:
+
+- `GET /api/v1/indexing/capabilities`
+- `POST /api/v1/indexing/sync`
+- `POST /api/v1/indexing/readiness`
+- `POST /api/v1/indexing/dashboard-scout`
+
+If OpenClaw scripts are connected at `CLAW_ARCHITECT_ROOT`, these endpoints execute them directly.
+If not connected, pipeline still works via built-in advanced indexing mode.
 
 ## Security
 

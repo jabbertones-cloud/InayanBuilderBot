@@ -247,6 +247,35 @@ function parseTrailingJson(text) {
   return null;
 }
 
+function readOpenClawScripts(clawArchitectRoot) {
+  try {
+    const pkgPath = path.join(clawArchitectRoot, "package.json");
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+    const scripts = pkg && typeof pkg.scripts === "object" ? pkg.scripts : {};
+    return Object.keys(scripts);
+  } catch {
+    return [];
+  }
+}
+
+function detectOpenClawCapabilities(clawArchitectRoot) {
+  const rootExists = fs.existsSync(clawArchitectRoot);
+  const scripts = rootExists ? readOpenClawScripts(clawArchitectRoot) : [];
+  const has = (name) => scripts.includes(name);
+  return {
+    mode: rootExists ? "connected" : "disconnected",
+    rootExists,
+    clawArchitectRoot,
+    scriptsAvailable: scripts.length,
+    canIndexSync: has("index:sync:agent"),
+    canReadinessPulse: has("repo:readiness:pulse"),
+    canDashboardScout: has("dashboard:repo:scout"),
+    scriptNames: scripts
+      .filter((s) => /index:sync:agent|repo:readiness:pulse|dashboard:repo:scout/.test(s))
+      .sort(),
+  };
+}
+
 function authMiddleware(apiKey) {
   return (req, res, next) => {
     if (!apiKey) return next();
@@ -829,6 +858,18 @@ const ChatSchema = z.object({
   }).optional(),
 });
 
+const OpenClawScoutSchema = z.object({
+  limit: z.number().int().min(5).max(50).default(12),
+  minStars: z.number().int().min(100).max(500000).default(500),
+  perQuery: z.number().int().min(5).max(50).default(20),
+  uiProbeLimit: z.number().int().min(10).max(100).default(45),
+});
+
+const OpenClawReadinessSchema = z.object({
+  minScore: z.number().int().min(1).max(100).default(80),
+  limit: z.number().int().min(1).max(100).default(20),
+});
+
 export function createApp() {
   ensureDataStore();
 
@@ -877,6 +918,85 @@ export function createApp() {
   app.use(express.static(publicDir));
 
   const requireAuth = authMiddleware(API_KEY);
+  const openClawCaps = detectOpenClawCapabilities(CLAW_ARCHITECT_ROOT);
+
+  const runOpenClawScript = async ({ scriptName, args = [], timeoutMs = 15 * 60 * 1000 }) => {
+    if (!openClawCaps.rootExists) {
+      return {
+        ok: false,
+        code: 1,
+        error: `openclaw_root_missing:${CLAW_ARCHITECT_ROOT}`,
+      };
+    }
+    if (!openClawCaps.scriptNames.includes(scriptName) && !openClawCaps[{
+      "index:sync:agent": "canIndexSync",
+      "repo:readiness:pulse": "canReadinessPulse",
+      "dashboard:repo:scout": "canDashboardScout",
+    }[scriptName] || ""]) {
+      return {
+        ok: false,
+        code: 1,
+        error: `openclaw_script_unavailable:${scriptName}`,
+      };
+    }
+    const result = await runCommand({
+      cmd: "npm",
+      args: ["run", "-s", scriptName, ...(args.length ? ["--", ...args] : [])],
+      cwd: CLAW_ARCHITECT_ROOT,
+      timeoutMs,
+    });
+    return {
+      ...result,
+      parsed: parseTrailingJson(`${result.stdout}\n${result.stderr}`),
+      stdout_tail: String(result.stdout || "").slice(-1200),
+      stderr_tail: String(result.stderr || "").slice(-1200),
+    };
+  };
+
+  app.get("/api/v1/indexing/capabilities", requireAuth, (_req, res) => {
+    return res.json({ ok: true, indexing: { ...openClawCaps, builtinAdvancedIndexing: true } });
+  });
+
+  app.post("/api/v1/indexing/sync", requireAuth, async (_req, res) => {
+    const result = await runOpenClawScript({ scriptName: "index:sync:agent", args: [] });
+    if (!result.ok) {
+      return res.status(502).json({ ok: false, error: "index_sync_failed", detail: result.error || result.stderr_tail || "index_sync_failed", result });
+    }
+    return res.json({ ok: true, task: "index_sync", result });
+  });
+
+  app.post("/api/v1/indexing/readiness", requireAuth, async (req, res) => {
+    const parsed = OpenClawReadinessSchema.safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+    const p = parsed.data;
+    const result = await runOpenClawScript({
+      scriptName: "repo:readiness:pulse",
+      args: ["--min-score", String(p.minScore), "--limit", String(p.limit)],
+    });
+    if (!result.ok) {
+      return res.status(502).json({ ok: false, error: "readiness_failed", detail: result.error || result.stderr_tail || "readiness_failed", result });
+    }
+    return res.json({ ok: true, task: "readiness", params: p, result });
+  });
+
+  app.post("/api/v1/indexing/dashboard-scout", requireAuth, async (req, res) => {
+    const parsed = OpenClawScoutSchema.safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+    const p = parsed.data;
+    const result = await runOpenClawScript({
+      scriptName: "dashboard:repo:scout",
+      args: [
+        "--limit", String(p.limit),
+        "--min-stars", String(p.minStars),
+        "--per-query", String(p.perQuery),
+        "--ui-probe-limit", String(p.uiProbeLimit),
+      ],
+    });
+    if (!result.ok) {
+      return res.status(502).json({ ok: false, error: "dashboard_scout_failed", detail: result.error || result.stderr_tail || "dashboard_scout_failed", result });
+    }
+    return res.json({ ok: true, task: "dashboard_scout", params: p, result });
+  });
 
   app.post("/api/v1/scout/run", requireAuth, async (req, res) => {
     try {
