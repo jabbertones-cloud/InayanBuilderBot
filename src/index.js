@@ -287,6 +287,99 @@ async function requestChatCompletion({
   }
 }
 
+async function requestAnthropicCompletion({
+  apiKey,
+  model,
+  systemPrompt,
+  userPrompt,
+  temperature = 0.3,
+  timeoutMs = 45000,
+}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 800,
+        temperature,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const txt = await response.text();
+      throw new Error(`anthropic_chat_failed:${response.status}:${txt.slice(0, 200)}`);
+    }
+
+    const data = await response.json();
+    const content = Array.isArray(data?.content)
+      ? data.content.find((x) => x?.type === "text")?.text
+      : null;
+    if (!content || typeof content !== "string") {
+      throw new Error("anthropic_chat_empty_response");
+    }
+    return content.trim();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function requestGeminiCompletion({
+  apiKey,
+  model,
+  systemPrompt,
+  userPrompt,
+  temperature = 0.3,
+  timeoutMs = 45000,
+}) {
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }],
+          },
+        ],
+        generationConfig: {
+          temperature,
+        },
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const txt = await response.text();
+      throw new Error(`gemini_chat_failed:${response.status}:${txt.slice(0, 200)}`);
+    }
+
+    const data = await response.json();
+    const content = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!content || typeof content !== "string") {
+      throw new Error("gemini_chat_empty_response");
+    }
+    return content.trim();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function generateModelReply({
   message,
   context,
@@ -298,8 +391,12 @@ async function generateModelReply({
   temperature,
   openaiApiKey,
   deepseekApiKey,
+  anthropicApiKey,
+  geminiApiKey,
   openaiModel,
   deepseekModel,
+  anthropicModel,
+  geminiModel,
 }) {
   const intel = collectRepoIntelContext({
     latestPipeline,
@@ -329,10 +426,14 @@ async function generateModelReply({
 
   const orderedProviders =
     providerPreference === "openai"
-      ? ["openai", "deepseek"]
+      ? ["openai", "deepseek", "anthropic", "gemini"]
       : providerPreference === "deepseek"
-        ? ["deepseek", "openai"]
-        : ["openai", "deepseek"];
+        ? ["deepseek", "openai", "anthropic", "gemini"]
+        : providerPreference === "anthropic"
+          ? ["anthropic", "openai", "deepseek", "gemini"]
+          : providerPreference === "gemini"
+            ? ["gemini", "openai", "deepseek", "anthropic"]
+            : ["openai", "deepseek", "anthropic", "gemini"];
 
   const errors = [];
   for (const provider of orderedProviders) {
@@ -350,15 +451,36 @@ async function generateModelReply({
           temperature,
         });
       }
-      if (!deepseekApiKey) throw new Error("deepseek_key_missing");
-      return await requestChatCompletion({
-        provider: "deepseek",
-        apiKey: deepseekApiKey,
-        model: modelOverride || deepseekModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
+      if (provider === "deepseek") {
+        if (!deepseekApiKey) throw new Error("deepseek_key_missing");
+        return await requestChatCompletion({
+          provider: "deepseek",
+          apiKey: deepseekApiKey,
+          model: modelOverride || deepseekModel,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature,
+        });
+      }
+      if (provider === "anthropic") {
+        if (!anthropicApiKey) throw new Error("anthropic_key_missing");
+        return await requestAnthropicCompletion({
+          apiKey: anthropicApiKey,
+          model: modelOverride || anthropicModel,
+          systemPrompt,
+          userPrompt,
+          temperature,
+        });
+      }
+      // gemini branch
+      if (!geminiApiKey) throw new Error("gemini_key_missing");
+      return await requestGeminiCompletion({
+        apiKey: geminiApiKey,
+        model: modelOverride || geminiModel,
+        systemPrompt,
+        userPrompt,
         temperature,
       });
     } catch (err) {
@@ -420,7 +542,7 @@ const PipelineSchema = z.object({
 
 const ChatSchema = z.object({
   message: z.string().min(2).max(3000),
-  provider: z.enum(["auto", "openai", "deepseek"]).default("auto"),
+  provider: z.enum(["auto", "openai", "deepseek", "anthropic", "gemini"]).default("auto"),
   model: z.string().min(1).max(120).optional(),
   temperature: z.number().min(0).max(2).default(0.3),
   context: z.object({
@@ -441,8 +563,12 @@ export function createApp() {
   const GITHUB_TOKEN = (process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "").trim();
   const OPENAI_API_KEY = (process.env.OPENAI_API_KEY || "").trim();
   const DEEPSEEK_API_KEY = (process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_KEY || "").trim();
+  const ANTHROPIC_API_KEY = (process.env.ANTHROPIC_API_KEY || "").trim();
+  const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY || "").trim();
   const OPENAI_CHAT_MODEL = (process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini").trim();
   const DEEPSEEK_CHAT_MODEL = (process.env.DEEPSEEK_CHAT_MODEL || "deepseek-chat").trim();
+  const ANTHROPIC_CHAT_MODEL = (process.env.ANTHROPIC_CHAT_MODEL || "claude-3-5-sonnet-latest").trim();
+  const GEMINI_CHAT_MODEL = (process.env.GEMINI_CHAT_MODEL || "gemini-1.5-pro").trim();
 
   app.disable("x-powered-by");
   app.use(helmet());
@@ -726,11 +852,11 @@ export function createApp() {
 
     const { message, context, provider, model, temperature } = parsed.data;
 
-    if (!OPENAI_API_KEY && !DEEPSEEK_API_KEY) {
+    if (!OPENAI_API_KEY && !DEEPSEEK_API_KEY && !ANTHROPIC_API_KEY && !GEMINI_API_KEY) {
       return res.status(503).json({
         ok: false,
         error: "chat_model_not_configured",
-        detail: "Set OPENAI_API_KEY and/or DEEPSEEK_API_KEY in environment.",
+        detail: "Set OPENAI_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY in environment.",
       });
     }
 
@@ -749,8 +875,12 @@ export function createApp() {
         temperature,
         openaiApiKey: OPENAI_API_KEY,
         deepseekApiKey: DEEPSEEK_API_KEY,
+        anthropicApiKey: ANTHROPIC_API_KEY,
+        geminiApiKey: GEMINI_API_KEY,
         openaiModel: OPENAI_CHAT_MODEL,
         deepseekModel: DEEPSEEK_CHAT_MODEL,
+        anthropicModel: ANTHROPIC_CHAT_MODEL,
+        geminiModel: GEMINI_CHAT_MODEL,
       });
     } catch (err) {
       return res.status(502).json({

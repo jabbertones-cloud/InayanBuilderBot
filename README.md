@@ -58,12 +58,20 @@ Set in `.env`:
 - `ALLOWED_ORIGIN`
 - `GITHUB_TOKEN` (recommended for GitHub API limit)
 - `CLAW_ARCHITECT_ROOT` (optional, default `/Users/tatsheen/claw-architect`)
-- `OPENAI_API_KEY` and/or `DEEPSEEK_API_KEY` (required for live AI chat)
-- `OPENAI_CHAT_MODEL` / `DEEPSEEK_CHAT_MODEL` (optional model overrides)
+- one or more provider keys for live AI chat:
+  - `OPENAI_API_KEY`
+  - `DEEPSEEK_API_KEY`
+  - `ANTHROPIC_API_KEY`
+  - `GEMINI_API_KEY`
+- optional model overrides:
+  - `OPENAI_CHAT_MODEL`
+  - `DEEPSEEK_CHAT_MODEL`
+  - `ANTHROPIC_CHAT_MODEL`
+  - `GEMINI_CHAT_MODEL`
 
 ## Live AI Chat
 
-`/api/v1/chat/reply` is model-backed (OpenAI/DeepSeek), not rule-based.
+`/api/v1/chat/reply` is model-backed (OpenAI, DeepSeek, Anthropic, Gemini), not rule-based.
 It is grounded in benchmark/index intelligence from:
 - latest in-app pipeline/scout/benchmark runs
 - latest OpenClaw reports when available:
@@ -84,9 +92,11 @@ Request shape:
 ```
 
 `provider` options:
-- `auto` (default): tries OpenAI then DeepSeek
+- `auto` (default): tries OpenAI, DeepSeek, Anthropic, then Gemini
 - `openai`
 - `deepseek`
+- `anthropic`
+- `gemini`
 
 If no provider keys are configured, endpoint returns `503 chat_model_not_configured`.
 
