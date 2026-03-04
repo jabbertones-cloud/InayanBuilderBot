@@ -43,6 +43,15 @@
   - `openclaw` (force external stack)
 - This makes advanced indexing usable out-of-box without extra MCP setup.
 
+### OpenClaw/MCP Parity Endpoints
+
+- Added dedicated indexing bridge endpoints:
+  - `GET /api/v1/indexing/capabilities`
+  - `POST /api/v1/indexing/sync`
+  - `POST /api/v1/indexing/readiness`
+  - `POST /api/v1/indexing/dashboard-scout`
+- These execute OpenClaw scripts when available and report clear capability status.
+
 ### Environment Alias Support
 
 Additional environment variable aliases are now accepted:

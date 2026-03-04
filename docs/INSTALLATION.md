@@ -52,6 +52,15 @@ For self-contained advanced indexing integration (no external toolchain), set:
 EXTERNAL_INDEXING_MODE=builtin
 ```
 
+For OpenClaw/MCP-style git indexing parity, keep:
+
+```bash
+EXTERNAL_INDEXING_MODE=auto
+CLAW_ARCHITECT_ROOT=/path/to/claw-architect
+```
+
+Then use `/api/v1/indexing/*` endpoints for sync/readiness/scout operations.
+
 ## Health Check
 
 ```bash

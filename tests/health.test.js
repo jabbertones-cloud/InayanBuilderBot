@@ -51,6 +51,24 @@ test("providers endpoint exposes configured flags without secrets", async () => 
   server.close();
 });
 
+test("indexing capabilities endpoint reports builtin support", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  const response = await fetch(`http://127.0.0.1:${port}/api/v1/indexing/capabilities`);
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.ok, true);
+  assert.equal(body.indexing.builtinAdvancedIndexing, true);
+  assert.equal(typeof body.indexing.mode, "string");
+
+  server.close();
+});
+
 test("pipeline run works with seed repos and runExternal=false", async () => {
   const app = createApp();
   const server = app.listen(0);
