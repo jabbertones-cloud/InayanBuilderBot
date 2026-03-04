@@ -61,13 +61,13 @@ Set in `.env`:
 - one or more provider keys for live AI chat:
   - `OPENAI_API_KEY`
   - `DEEPSEEK_API_KEY`
-  - `ANTHROPIC_API_KEY`
-  - `GEMINI_API_KEY`
+  - `ANTHROPIC_API_KEY` (or `CLAUDE_API_KEY`)
+  - `GEMINI_API_KEY` (or `GOOGLE_API_KEY` / `GOOGLE_GENAI_API_KEY`)
 - optional model overrides:
   - `OPENAI_CHAT_MODEL`
   - `DEEPSEEK_CHAT_MODEL`
-  - `ANTHROPIC_CHAT_MODEL`
-  - `GEMINI_CHAT_MODEL`
+  - `ANTHROPIC_CHAT_MODEL` (or `CLAUDE_CHAT_MODEL`)
+  - `GEMINI_CHAT_MODEL` (or `GOOGLE_CHAT_MODEL`)
 
 ## Live AI Chat
 
@@ -96,7 +96,9 @@ Request shape:
 - `openai`
 - `deepseek`
 - `anthropic`
+- `claude` (alias for `anthropic`)
 - `gemini`
+- `google` (alias for `gemini`)
 
 If no provider keys are configured, endpoint returns `503 chat_model_not_configured`.
 

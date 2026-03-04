@@ -105,3 +105,50 @@ test("chat endpoint returns 503 when no model keys configured", async () => {
 
   server.close();
 });
+
+test("chat endpoint accepts claude/google provider aliases", async () => {
+  delete process.env.OPENAI_API_KEY;
+  delete process.env.DEEPSEEK_API_KEY;
+  delete process.env.DEEPSEEK_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.CLAUDE_API_KEY;
+  delete process.env.GEMINI_API_KEY;
+  delete process.env.GOOGLE_API_KEY;
+  delete process.env.GOOGLE_GENAI_API_KEY;
+
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+
+  const claudeResponse = await fetch(`http://127.0.0.1:${port}/api/v1/chat/reply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Use claude alias",
+      provider: "claude",
+      temperature: 0.3,
+    }),
+  });
+  const claudeBody = await claudeResponse.json();
+
+  const googleResponse = await fetch(`http://127.0.0.1:${port}/api/v1/chat/reply`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Use google alias",
+      provider: "google",
+      temperature: 0.3,
+    }),
+  });
+  const googleBody = await googleResponse.json();
+
+  assert.equal(claudeResponse.status, 503);
+  assert.equal(claudeBody.error, "chat_model_not_configured");
+  assert.equal(googleResponse.status, 503);
+  assert.equal(googleBody.error, "chat_model_not_configured");
+
+  server.close();
+});
