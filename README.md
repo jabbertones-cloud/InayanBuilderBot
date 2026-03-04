@@ -23,8 +23,11 @@ This is a robust, working system, not a lite demo. It includes:
 - `POST /api/v1/benchmark/run`
 - `POST /api/v1/masterpiece/build`
 - `POST /api/v1/chat/reply`
+- `POST /api/v1/chat/reply/stream` (SSE)
 - `GET /api/v1/chat/providers`
 - `GET /api/v1/chat/history`
+- `GET /api/v1/chat/sessions`
+- `GET /api/v1/chat/sessions/:sessionId`
 - `GET /api/v1/runs`
 - `GET /health`
 
@@ -110,6 +113,27 @@ Provider capability endpoint:
 - Returns alias mapping (`claude -> anthropic`, `google -> gemini`)
 - Does not expose API keys
 
+Streaming endpoint:
+
+- `POST /api/v1/chat/reply/stream`
+- Server-sent events: `start`, `chunk`, `done`, `error`
+- Same request body as `/api/v1/chat/reply`
+- Supports `sessionId` for persistent chat threads
+
+Session support:
+
+- Include optional `sessionId` in `/api/v1/chat/reply` or `/api/v1/chat/reply/stream`
+- If omitted, a new session is created and returned
+- Session history is persisted and queryable with `/api/v1/chat/sessions*`
+
+Auto-routing quality:
+
+- In `provider=auto`, provider order is tuned by runtime benchmark-like metrics:
+  - moving success rate
+  - moving latency
+  - moving estimated cost
+- Provider metrics are visible via `/api/v1/chat/providers`
+
 ## Run
 
 ```bash
@@ -117,6 +141,19 @@ npm run dev
 ```
 
 Open: `http://localhost:3000`
+
+## One-Click Deploy (Docker)
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+Health:
+
+```bash
+curl http://localhost:3000/health
+```
 
 ## Security
 

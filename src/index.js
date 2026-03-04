@@ -20,25 +20,59 @@ const CLAW_ARCHITECT_ROOT = process.env.CLAW_ARCHITECT_ROOT || "/Users/tatsheen/
 const appState = {
   runs: [],
   chats: [],
+  chatSessions: {},
+  providerMetrics: {},
 };
 
 function ensureDataStore() {
   fs.mkdirSync(dataDir, { recursive: true });
   if (!fs.existsSync(runsFile)) {
-    fs.writeFileSync(runsFile, JSON.stringify({ runs: [], chats: [] }, null, 2));
+    fs.writeFileSync(
+      runsFile,
+      JSON.stringify({ runs: [], chats: [], chatSessions: {}, providerMetrics: {} }, null, 2)
+    );
   }
   try {
     const raw = JSON.parse(fs.readFileSync(runsFile, "utf8"));
     appState.runs = Array.isArray(raw.runs) ? raw.runs : [];
     appState.chats = Array.isArray(raw.chats) ? raw.chats : [];
+    appState.chatSessions = raw && typeof raw.chatSessions === "object" && raw.chatSessions
+      ? raw.chatSessions
+      : {};
+    appState.providerMetrics = raw && typeof raw.providerMetrics === "object" && raw.providerMetrics
+      ? raw.providerMetrics
+      : {};
   } catch {
     appState.runs = [];
     appState.chats = [];
+    appState.chatSessions = {};
+    appState.providerMetrics = {};
   }
 }
 
 function persistDataStore() {
-  fs.writeFileSync(runsFile, JSON.stringify({ runs: appState.runs.slice(0, 100), chats: appState.chats.slice(0, 200) }, null, 2));
+  const sessions = Object.entries(appState.chatSessions || {})
+    .slice(0, 100)
+    .reduce((acc, [id, session]) => {
+      acc[id] = {
+        ...session,
+        messages: Array.isArray(session?.messages) ? session.messages.slice(-100) : [],
+      };
+      return acc;
+    }, {});
+  fs.writeFileSync(
+    runsFile,
+    JSON.stringify(
+      {
+        runs: appState.runs.slice(0, 100),
+        chats: appState.chats.slice(0, 300),
+        chatSessions: sessions,
+        providerMetrics: appState.providerMetrics || {},
+      },
+      null,
+      2
+    )
+  );
 }
 
 function nowId(prefix = "run") {
@@ -47,7 +81,120 @@ function nowId(prefix = "run") {
 
 function trimHistory() {
   if (appState.runs.length > 100) appState.runs.length = 100;
-  if (appState.chats.length > 200) appState.chats.length = 200;
+  if (appState.chats.length > 300) appState.chats.length = 300;
+  const sessionIds = Object.keys(appState.chatSessions || {});
+  if (sessionIds.length > 100) {
+    const sorted = sessionIds
+      .map((id) => ({ id, updatedAt: Date.parse(appState.chatSessions[id]?.updatedAt || 0) || 0 }))
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, 100)
+      .map((s) => s.id);
+    const keep = new Set(sorted);
+    for (const id of sessionIds) {
+      if (!keep.has(id)) delete appState.chatSessions[id];
+    }
+  }
+  for (const id of Object.keys(appState.chatSessions || {})) {
+    const messages = appState.chatSessions[id]?.messages;
+    if (Array.isArray(messages) && messages.length > 100) {
+      appState.chatSessions[id].messages = messages.slice(-100);
+    }
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function estimateTokenCount(text) {
+  return Math.max(1, Math.ceil(String(text || "").length / 4));
+}
+
+function estimateCostUsd(provider, inputTokens, outputTokens) {
+  // Coarse defaults per 1k tokens, override with env when needed.
+  const defaults = {
+    openai_in: Number(process.env.OPENAI_COST_INPUT_PER_1K || 0.005),
+    openai_out: Number(process.env.OPENAI_COST_OUTPUT_PER_1K || 0.015),
+    deepseek_in: Number(process.env.DEEPSEEK_COST_INPUT_PER_1K || 0.0014),
+    deepseek_out: Number(process.env.DEEPSEEK_COST_OUTPUT_PER_1K || 0.0028),
+    anthropic_in: Number(process.env.ANTHROPIC_COST_INPUT_PER_1K || 0.003),
+    anthropic_out: Number(process.env.ANTHROPIC_COST_OUTPUT_PER_1K || 0.015),
+    gemini_in: Number(process.env.GEMINI_COST_INPUT_PER_1K || 0.00125),
+    gemini_out: Number(process.env.GEMINI_COST_OUTPUT_PER_1K || 0.005),
+  };
+  const inRate = Number(defaults[`${provider}_in`] || 0);
+  const outRate = Number(defaults[`${provider}_out`] || 0);
+  const total = (Math.max(0, inputTokens) / 1000) * inRate + (Math.max(0, outputTokens) / 1000) * outRate;
+  return Math.round(total * 1e6) / 1e6;
+}
+
+function ensureProviderMetric(provider) {
+  if (!appState.providerMetrics[provider]) {
+    appState.providerMetrics[provider] = {
+      attempts: 0,
+      success: 0,
+      failed: 0,
+      avgLatencyMs: null,
+      avgEstimatedCostUsd: null,
+      lastError: null,
+      lastUsedAt: null,
+    };
+  }
+  return appState.providerMetrics[provider];
+}
+
+function recordProviderMetric({ provider, ok, latencyMs, estimatedCostUsd, error }) {
+  const metric = ensureProviderMetric(provider);
+  metric.attempts += 1;
+  if (ok) metric.success += 1;
+  else metric.failed += 1;
+  if (Number.isFinite(latencyMs) && latencyMs >= 0) {
+    metric.avgLatencyMs = metric.avgLatencyMs == null
+      ? latencyMs
+      : Math.round((metric.avgLatencyMs * 0.8 + latencyMs * 0.2) * 100) / 100;
+  }
+  if (Number.isFinite(estimatedCostUsd) && estimatedCostUsd >= 0) {
+    metric.avgEstimatedCostUsd = metric.avgEstimatedCostUsd == null
+      ? estimatedCostUsd
+      : Math.round((metric.avgEstimatedCostUsd * 0.8 + estimatedCostUsd * 0.2) * 1e6) / 1e6;
+  }
+  metric.lastUsedAt = new Date().toISOString();
+  if (!ok) metric.lastError = String(error || "unknown_error").slice(0, 200);
+}
+
+function ensureChatSession(sessionId) {
+  const now = new Date().toISOString();
+  const id = sessionId || nowId("session");
+  if (!appState.chatSessions[id]) {
+    appState.chatSessions[id] = {
+      id,
+      createdAt: now,
+      updatedAt: now,
+      messages: [],
+    };
+  }
+  appState.chatSessions[id].updatedAt = now;
+  return appState.chatSessions[id];
+}
+
+function appendSessionMessage(session, role, content, meta = {}) {
+  session.messages.push({
+    id: nowId("msg"),
+    role,
+    content: String(content || ""),
+    at: new Date().toISOString(),
+    meta,
+  });
+  session.updatedAt = new Date().toISOString();
+}
+
+function getSessionHistory(session, maxMessages = 8) {
+  if (!session || !Array.isArray(session.messages)) return [];
+  return session.messages.slice(-maxMessages).map((m) => ({
+    role: m.role,
+    content: m.content,
+    at: m.at,
+  }));
 }
 
 async function runCommand({ cmd, args, cwd, timeoutMs = 12 * 60 * 1000 }) {
@@ -397,6 +544,9 @@ async function generateModelReply({
   deepseekModel,
   anthropicModel,
   geminiModel,
+  providerMetrics,
+  providerStatus,
+  sessionHistory,
 }) {
   const intel = collectRepoIntelContext({
     latestPipeline,
@@ -415,6 +565,7 @@ async function generateModelReply({
   const userPrompt = JSON.stringify({
     message,
     context: context || {},
+    session_history: Array.isArray(sessionHistory) ? sessionHistory : [],
     repo_intel_context: intel,
     guidance_focus: [
       "indexing strategy",
@@ -424,7 +575,9 @@ async function generateModelReply({
     ],
   });
 
-  const orderedProviders =
+  const allProviders = ["openai", "deepseek", "anthropic", "gemini"];
+  const configuredProviders = allProviders.filter((p) => providerStatus?.providers?.[p]?.configured);
+  const preferenceOrder =
     providerPreference === "openai"
       ? ["openai", "deepseek", "anthropic", "gemini"]
       : providerPreference === "deepseek"
@@ -434,16 +587,35 @@ async function generateModelReply({
           : providerPreference === "gemini"
             ? ["gemini", "openai", "deepseek", "anthropic"]
             : ["openai", "deepseek", "anthropic", "gemini"];
+  const providerScore = (provider) => {
+    const m = providerMetrics?.[provider];
+    if (!m || !m.attempts) return 0;
+    const successRate = m.success / Math.max(1, m.attempts);
+    const latencyPenalty = Number.isFinite(m.avgLatencyMs) ? m.avgLatencyMs / 2500 : 0.4;
+    const costPenalty = Number.isFinite(m.avgEstimatedCostUsd) ? m.avgEstimatedCostUsd / 0.02 : 0.4;
+    return successRate * 3 - latencyPenalty - costPenalty;
+  };
+  const orderedProviders = providerPreference === "auto"
+    ? [...configuredProviders].sort((a, b) => {
+      const delta = providerScore(b) - providerScore(a);
+      if (Math.abs(delta) > 0.01) return delta;
+      return preferenceOrder.indexOf(a) - preferenceOrder.indexOf(b);
+    })
+    : preferenceOrder;
 
   const errors = [];
   for (const provider of orderedProviders) {
     try {
+      const attemptStarted = Date.now();
+      let reply = "";
+      let resolvedModel = modelOverride || "";
       if (provider === "openai") {
         if (!openaiApiKey) throw new Error("openai_key_missing");
-        return await requestChatCompletion({
+        resolvedModel = modelOverride || openaiModel;
+        reply = await requestChatCompletion({
           provider: "openai",
           apiKey: openaiApiKey,
-          model: modelOverride || openaiModel,
+          model: resolvedModel,
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
@@ -451,12 +623,13 @@ async function generateModelReply({
           temperature,
         });
       }
-      if (provider === "deepseek") {
+      else if (provider === "deepseek") {
         if (!deepseekApiKey) throw new Error("deepseek_key_missing");
-        return await requestChatCompletion({
+        resolvedModel = modelOverride || deepseekModel;
+        reply = await requestChatCompletion({
           provider: "deepseek",
           apiKey: deepseekApiKey,
-          model: modelOverride || deepseekModel,
+          model: resolvedModel,
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
@@ -464,26 +637,46 @@ async function generateModelReply({
           temperature,
         });
       }
-      if (provider === "anthropic") {
+      else if (provider === "anthropic") {
         if (!anthropicApiKey) throw new Error("anthropic_key_missing");
-        return await requestAnthropicCompletion({
+        resolvedModel = modelOverride || anthropicModel;
+        reply = await requestAnthropicCompletion({
           apiKey: anthropicApiKey,
-          model: modelOverride || anthropicModel,
+          model: resolvedModel,
           systemPrompt,
           userPrompt,
           temperature,
         });
       }
-      // gemini branch
-      if (!geminiApiKey) throw new Error("gemini_key_missing");
-      return await requestGeminiCompletion({
-        apiKey: geminiApiKey,
-        model: modelOverride || geminiModel,
-        systemPrompt,
-        userPrompt,
-        temperature,
-      });
+      else {
+        if (!geminiApiKey) throw new Error("gemini_key_missing");
+        resolvedModel = modelOverride || geminiModel;
+        reply = await requestGeminiCompletion({
+          apiKey: geminiApiKey,
+          model: resolvedModel,
+          systemPrompt,
+          userPrompt,
+          temperature,
+        });
+      }
+
+      const latencyMs = Date.now() - attemptStarted;
+      const inputTokens = estimateTokenCount(`${systemPrompt}\n${userPrompt}`);
+      const outputTokens = estimateTokenCount(reply);
+      const estimatedCostUsd = estimateCostUsd(provider, inputTokens, outputTokens);
+      recordProviderMetric({ provider, ok: true, latencyMs, estimatedCostUsd });
+      return {
+        reply,
+        provider,
+        model: resolvedModel,
+        latencyMs,
+        estimatedCostUsd,
+        inputTokens,
+        outputTokens,
+      };
     } catch (err) {
+      const msg = String(err?.message || err);
+      recordProviderMetric({ provider, ok: false, latencyMs: null, estimatedCostUsd: null, error: msg });
       errors.push(String(err?.message || err));
     }
   }
@@ -580,6 +773,7 @@ const ChatSchema = z.object({
     .transform((value) => normalizeProviderPreference(value)),
   model: z.string().min(1).max(120).optional(),
   temperature: z.number().min(0).max(2).default(0.3),
+  sessionId: z.string().min(2).max(120).optional(),
   context: z.object({
     productName: z.string().optional(),
     stack: z.array(z.string()).optional(),
@@ -891,66 +1085,173 @@ export function createApp() {
     return res.json({ ok, runId, stageResults, scout: scoutRepos, benchmark: benchmarkRanked, blueprint });
   });
 
-  app.post("/api/v1/chat/reply", requireAuth, async (req, res) => {
-    const parsed = ChatSchema.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+  const redactSensitiveError = (value) => String(value || "")
+    .replace(/Bearer\\s+[A-Za-z0-9._-]+/g, "Bearer [REDACTED]")
+    .replace(/sk-[A-Za-z0-9._-]+/g, "[REDACTED_KEY]");
 
-    const { message, context, provider, model, temperature } = parsed.data;
-
+  const executeChatReply = async ({ message, context, provider, model, temperature, sessionId }) => {
     if (!OPENAI_API_KEY && !DEEPSEEK_API_KEY && !ANTHROPIC_API_KEY && !GEMINI_API_KEY) {
-      return res.status(503).json({
-        ok: false,
-        error: "chat_model_not_configured",
-        detail: "Set OPENAI_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY in environment.",
-      });
+      const err = new Error("chat_model_not_configured");
+      err.status = 503;
+      throw err;
     }
-
     const latestPipeline = appState.runs.find((r) => r.type === "pipeline");
-
-    let reply;
-    try {
-      reply = await generateModelReply({
-        message,
-        context,
-        latestPipeline,
-        allRuns: appState.runs,
-        clawArchitectRoot: CLAW_ARCHITECT_ROOT,
-        providerPreference: provider,
-        modelOverride: model,
-        temperature,
-        openaiApiKey: OPENAI_API_KEY,
-        deepseekApiKey: DEEPSEEK_API_KEY,
-        anthropicApiKey: ANTHROPIC_API_KEY,
-        geminiApiKey: GEMINI_API_KEY,
-        openaiModel: OPENAI_CHAT_MODEL,
-        deepseekModel: DEEPSEEK_CHAT_MODEL,
-        anthropicModel: ANTHROPIC_CHAT_MODEL,
-        geminiModel: GEMINI_CHAT_MODEL,
-      });
-    } catch (err) {
-      return res.status(502).json({
-        ok: false,
-        error: "chat_provider_failed",
-        detail: String(err?.message || err).replace(/Bearer\\s+[A-Za-z0-9._-]+/g, "Bearer [REDACTED]"),
-      });
-    }
-
+    const session = ensureChatSession(sessionId);
+    appendSessionMessage(session, "user", message);
+    const modelResult = await generateModelReply({
+      message,
+      context,
+      latestPipeline,
+      allRuns: appState.runs,
+      clawArchitectRoot: CLAW_ARCHITECT_ROOT,
+      providerPreference: provider,
+      modelOverride: model,
+      temperature,
+      openaiApiKey: OPENAI_API_KEY,
+      deepseekApiKey: DEEPSEEK_API_KEY,
+      anthropicApiKey: ANTHROPIC_API_KEY,
+      geminiApiKey: GEMINI_API_KEY,
+      openaiModel: OPENAI_CHAT_MODEL,
+      deepseekModel: DEEPSEEK_CHAT_MODEL,
+      anthropicModel: ANTHROPIC_CHAT_MODEL,
+      geminiModel: GEMINI_CHAT_MODEL,
+      providerMetrics: appState.providerMetrics,
+      providerStatus,
+      sessionHistory: getSessionHistory(session, 8),
+    });
+    appendSessionMessage(session, "assistant", modelResult.reply, {
+      provider: modelResult.provider,
+      model: modelResult.model,
+      latencyMs: modelResult.latencyMs,
+      estimatedCostUsd: modelResult.estimatedCostUsd,
+      inputTokens: modelResult.inputTokens,
+      outputTokens: modelResult.outputTokens,
+    });
     const chat = {
       id: nowId("chat"),
+      sessionId: session.id,
       at: new Date().toISOString(),
       message,
       context: context || null,
-      reply,
+      reply: modelResult.reply,
+      provider: modelResult.provider,
+      model: modelResult.model,
+      latencyMs: modelResult.latencyMs,
+      estimatedCostUsd: modelResult.estimatedCostUsd,
+      inputTokens: modelResult.inputTokens,
+      outputTokens: modelResult.outputTokens,
     };
     appState.chats.unshift(chat);
     trimHistory();
     persistDataStore();
+    return { chat, session, modelResult };
+  };
 
-    return res.json({ ok: true, reply, chat });
+  app.post("/api/v1/chat/reply", requireAuth, async (req, res) => {
+    const parsed = ChatSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+
+    const { message, context, provider, model, temperature, sessionId } = parsed.data;
+    try {
+      const result = await executeChatReply({ message, context, provider, model, temperature, sessionId });
+      return res.json({
+        ok: true,
+        reply: result.modelResult.reply,
+        sessionId: result.session.id,
+        provider: result.modelResult.provider,
+        model: result.modelResult.model,
+        latencyMs: result.modelResult.latencyMs,
+        estimatedCostUsd: result.modelResult.estimatedCostUsd,
+        chat: result.chat,
+      });
+    } catch (err) {
+      if (err?.status === 503 && String(err?.message) === "chat_model_not_configured") {
+        return res.status(503).json({
+          ok: false,
+          error: "chat_model_not_configured",
+          detail: "Set OPENAI_API_KEY, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY in environment.",
+        });
+      }
+      return res.status(502).json({
+        ok: false,
+        error: "chat_provider_failed",
+        detail: redactSensitiveError(String(err?.message || err)),
+      });
+    }
+  });
+
+  app.post("/api/v1/chat/reply/stream", requireAuth, async (req, res) => {
+    const parsed = ChatSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+    const { message, context, provider, model, temperature, sessionId } = parsed.data;
+
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
+    const sendEvt = (event, payload) => {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    };
+
+    try {
+      const result = await executeChatReply({ message, context, provider, model, temperature, sessionId });
+      sendEvt("start", {
+        sessionId: result.session.id,
+        provider: result.modelResult.provider,
+        model: result.modelResult.model,
+      });
+      const text = String(result.modelResult.reply || "");
+      const parts = text.match(/.{1,28}(\s|$)/g) || [text];
+      for (const rawPart of parts) {
+        const delta = rawPart || "";
+        if (!delta) continue;
+        sendEvt("chunk", { delta });
+        await sleep(12);
+      }
+      sendEvt("done", {
+        reply: text,
+        sessionId: result.session.id,
+        provider: result.modelResult.provider,
+        model: result.modelResult.model,
+        latencyMs: result.modelResult.latencyMs,
+        estimatedCostUsd: result.modelResult.estimatedCostUsd,
+      });
+      return res.end();
+    } catch (err) {
+      const code = err?.status === 503 ? "chat_model_not_configured" : "chat_provider_failed";
+      sendEvt("error", {
+        code,
+        detail: redactSensitiveError(String(err?.message || err)),
+      });
+      return res.end();
+    }
   });
 
   app.get("/api/v1/chat/history", requireAuth, (_req, res) => {
     return res.json({ ok: true, count: appState.chats.length, history: appState.chats });
+  });
+
+  app.get("/api/v1/chat/sessions", requireAuth, (_req, res) => {
+    const sessions = Object.values(appState.chatSessions || {})
+      .map((s) => ({
+        id: s.id,
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
+        messageCount: Array.isArray(s.messages) ? s.messages.length : 0,
+        lastMessage: Array.isArray(s.messages) && s.messages.length
+          ? String(s.messages[s.messages.length - 1]?.content || "").slice(0, 120)
+          : "",
+      }))
+      .sort((a, b) => Date.parse(b.updatedAt || 0) - Date.parse(a.updatedAt || 0));
+    return res.json({ ok: true, count: sessions.length, sessions });
+  });
+
+  app.get("/api/v1/chat/sessions/:sessionId", requireAuth, (req, res) => {
+    const id = String(req.params.sessionId || "");
+    const session = appState.chatSessions[id];
+    if (!session) return res.status(404).json({ ok: false, error: "session_not_found" });
+    return res.json({ ok: true, session });
   });
 
   app.get("/api/v1/runs", requireAuth, (_req, res) => {
@@ -958,7 +1259,7 @@ export function createApp() {
   });
 
   app.get("/api/v1/chat/providers", requireAuth, (_req, res) => {
-    return res.json({ ok: true, ...providerStatus });
+    return res.json({ ok: true, ...providerStatus, metrics: appState.providerMetrics });
   });
 
   app.get("/health", (_req, res) => {

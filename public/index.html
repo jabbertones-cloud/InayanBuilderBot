@@ -114,8 +114,12 @@ open source workflow automation dashboard</textarea>
           <input id="chatModel" placeholder="Leave blank for provider default" />
           <label>Temperature</label>
           <input id="chatTemperature" value="0.3" />
+          <label>Session ID (optional)</label>
+          <input id="chatSessionId" placeholder="auto-created if blank" />
           <button id="sendChat">Send</button>
+          <button id="sendChatStream">Stream</button>
           <button id="providerStatus" class="warn">Providers</button>
+          <button id="refreshSessions" class="warn">Sessions</button>
           <button id="refreshChat" class="alt">History</button>
           <pre id="chatOut">Chat ready.</pre>
         </section>
@@ -233,16 +237,79 @@ open source workflow automation dashboard</textarea>
         chatOut.textContent = "Sending...";
         try {
           const model = document.getElementById("chatModel").value.trim();
+          const sessionId = document.getElementById("chatSessionId").value.trim();
           const tempRaw = Number(document.getElementById("chatTemperature").value || 0.3);
           const temperature = Number.isFinite(tempRaw) ? tempRaw : 0.3;
           const data = await api("/api/v1/chat/reply", {
             message: document.getElementById("chatMsg").value,
             provider: document.getElementById("chatProvider").value,
             model: model || undefined,
+            sessionId: sessionId || undefined,
             temperature,
             context: { productName: document.getElementById("productName").value }
           });
+          if (data.sessionId) document.getElementById("chatSessionId").value = data.sessionId;
           chatOut.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+          chatOut.textContent = String(e);
+        }
+      };
+
+      document.getElementById("sendChatStream").onclick = async () => {
+        chatOut.textContent = "";
+        try {
+          const model = document.getElementById("chatModel").value.trim();
+          const sessionId = document.getElementById("chatSessionId").value.trim();
+          const tempRaw = Number(document.getElementById("chatTemperature").value || 0.3);
+          const temperature = Number.isFinite(tempRaw) ? tempRaw : 0.3;
+          const response = await fetch("/api/v1/chat/reply/stream", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message: document.getElementById("chatMsg").value,
+              provider: document.getElementById("chatProvider").value,
+              model: model || undefined,
+              sessionId: sessionId || undefined,
+              temperature,
+              context: { productName: document.getElementById("productName").value },
+            }),
+          });
+          if (!response.ok || !response.body) {
+            const text = await response.text();
+            throw new Error(text || `stream_failed:${response.status}`);
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let replyText = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const frames = buffer.split("\n\n");
+            buffer = frames.pop() || "";
+            for (const frame of frames) {
+              const eventLine = frame.split("\n").find((l) => l.startsWith("event:"));
+              const dataLine = frame.split("\n").find((l) => l.startsWith("data:"));
+              if (!eventLine || !dataLine) continue;
+              const event = eventLine.slice(6).trim();
+              const payload = JSON.parse(dataLine.slice(5).trim());
+              if (event === "start" && payload.sessionId) {
+                document.getElementById("chatSessionId").value = payload.sessionId;
+              }
+              if (event === "chunk") {
+                replyText += String(payload.delta || "");
+                chatOut.textContent = replyText;
+              }
+              if (event === "done") {
+                chatOut.textContent = `${replyText}\n\n${JSON.stringify(payload, null, 2)}`;
+              }
+              if (event === "error") {
+                chatOut.textContent = JSON.stringify(payload, null, 2);
+              }
+            }
+          }
         } catch (e) {
           chatOut.textContent = String(e);
         }
@@ -259,6 +326,14 @@ open source workflow automation dashboard</textarea>
       document.getElementById("refreshChat").onclick = async () => {
         try {
           chatOut.textContent = JSON.stringify(await api("/api/v1/chat/history"), null, 2);
+        } catch (e) {
+          chatOut.textContent = String(e);
+        }
+      };
+
+      document.getElementById("refreshSessions").onclick = async () => {
+        try {
+          chatOut.textContent = JSON.stringify(await api("/api/v1/chat/sessions"), null, 2);
         } catch (e) {
           chatOut.textContent = String(e);
         }
