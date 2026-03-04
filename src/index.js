@@ -275,6 +275,34 @@ function parseTrailingJson(text) {
   return null;
 }
 
+function parseReleaseChecklistSummary(text) {
+  const raw = String(text || "");
+  const hard = raw.match(/Hard failures:\s*(\d+)/i);
+  const blocked = raw.match(/Blocked checks:\s*(\d+)/i);
+  const blockedLines = raw
+    .split(/\r?\n/g)
+    .map((line) => String(line || "").trim())
+    .filter((line) => line.startsWith("- ") && line.includes(":") && /\(missing live\/prod environment variables\)/i.test(line))
+    .slice(0, 25);
+
+  return {
+    hard_failures: Number(hard?.[1] || 0),
+    env_blocked_checks: Number(blocked?.[1] || 0),
+    blocked_items: blockedLines.map((line) => line.replace(/^- /, "")),
+  };
+}
+
+function detectDependencyInstallHint(text) {
+  const raw = String(text || "");
+  const missingPkg = raw.match(/Cannot find package '([^']+)'/i);
+  if (!missingPkg) return null;
+  return {
+    issue: "missing_local_dependency",
+    package: missingPkg[1],
+    suggested_fix: "Run npm ci in the failing repo before build/check steps.",
+  };
+}
+
 function parseEnvText(text) {
   const out = {};
   for (const line of String(text || "").split(/\r?\n/g)) {
@@ -2803,11 +2831,16 @@ export function createApp() {
           { name: "index_sync", cmd: "npm", args: ["run", "-s", "index:sync:agent"] },
           { name: "repo_readiness", cmd: "npm", args: ["run", "-s", "repo:readiness:pulse", "--", "--min-score", "80", "--limit", "20"] },
           { name: "dashboard_scout", cmd: "npm", args: ["run", "-s", "dashboard:repo:scout", "--", "--limit", String(Math.max(8, p.topK)), "--min-stars", String(p.minStars), "--per-query", "20", "--ui-probe-limit", "45"] },
+          { name: "release_four_repos_check", cmd: "node", args: ["scripts/release-checklist-four-repos.js", "--check"] },
         ];
 
         for (const s of extSteps) {
           const r = await runCommand({ cmd: s.cmd, args: s.args, cwd: CLAW_ARCHITECT_ROOT, timeoutMs: 15 * 60 * 1000 });
           const parsedJson = parseTrailingJson(`${r.stdout}\n${r.stderr}`);
+          const releaseSummary = s.name === "release_four_repos_check"
+            ? parseReleaseChecklistSummary(`${r.stdout}\n${r.stderr}`)
+            : null;
+          const dependencyHint = detectDependencyInstallHint(`${r.stdout}\n${r.stderr}`);
           stageResults.push({
             stage: `external_${s.name}`,
             ok: r.ok,
@@ -2815,6 +2848,8 @@ export function createApp() {
               code: r.code,
               timed_out: r.timed_out,
               parsed: parsedJson,
+              release_summary: releaseSummary,
+              dependency_hint: dependencyHint,
               stdout_tail: String(r.stdout || "").slice(-1200),
               stderr_tail: String(r.stderr || "").slice(-1200),
             },
