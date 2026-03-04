@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
 import express from "express";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -8,327 +9,595 @@ import { z } from "zod";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const publicDir = path.join(__dirname, "..", "public");
+const rootDir = path.join(__dirname, "..");
+const publicDir = path.join(rootDir, "public");
+const dataDir = path.join(rootDir, ".data");
+const runsFile = path.join(dataDir, "runs.json");
+
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
+const CLAW_ARCHITECT_ROOT = process.env.CLAW_ARCHITECT_ROOT || "/Users/tatsheen/claw-architect";
 
-export function createApp() {
-const app = express();
+const appState = {
+  runs: [],
+  chats: [],
+};
 
-const NODE_ENV = process.env.NODE_ENV || "development";
-const API_KEY = (process.env.BUILDERBOT_API_KEY || "").trim();
-const ALLOWED_ORIGIN = (process.env.ALLOWED_ORIGIN || "").trim();
-const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60000);
-const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 60);
-const GITHUB_TOKEN = (process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "").trim();
-
-const runHistory = [];
-const chatHistory = [];
-
-app.disable("x-powered-by");
-app.use(helmet());
-app.use(express.json({ limit: "1mb" }));
-app.use(
-  rateLimit({
-    windowMs: RATE_LIMIT_WINDOW_MS,
-    max: RATE_LIMIT_MAX,
-    standardHeaders: true,
-    legacyHeaders: false,
-  })
-);
-
-app.use((req, res, next) => {
-  if (ALLOWED_ORIGIN && req.headers.origin === ALLOWED_ORIGIN) {
-    res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
-    res.setHeader("Vary", "Origin");
+function ensureDataStore() {
+  fs.mkdirSync(dataDir, { recursive: true });
+  if (!fs.existsSync(runsFile)) {
+    fs.writeFileSync(runsFile, JSON.stringify({ runs: [], chats: [] }, null, 2));
   }
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  if (req.method === "OPTIONS") return res.sendStatus(204);
-  return next();
-});
-
-app.use(express.static(publicDir));
-
-function authMiddleware(req, res, next) {
-  if (!API_KEY) return next();
-  const authHeader = String(req.headers.authorization || "");
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-  if (!token || token !== API_KEY) return res.status(401).json({ ok: false, error: "unauthorized" });
-  return next();
+  try {
+    const raw = JSON.parse(fs.readFileSync(runsFile, "utf8"));
+    appState.runs = Array.isArray(raw.runs) ? raw.runs : [];
+    appState.chats = Array.isArray(raw.chats) ? raw.chats : [];
+  } catch {
+    appState.runs = [];
+    appState.chats = [];
+  }
 }
 
-function safeNowId(prefix = "run") {
+function persistDataStore() {
+  fs.writeFileSync(runsFile, JSON.stringify({ runs: appState.runs.slice(0, 100), chats: appState.chats.slice(0, 200) }, null, 2));
+}
+
+function nowId(prefix = "run") {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function githubSearch(query, perPage = 15) {
+function trimHistory() {
+  if (appState.runs.length > 100) appState.runs.length = 100;
+  if (appState.chats.length > 200) appState.chats.length = 200;
+}
+
+async function runCommand({ cmd, args, cwd, timeoutMs = 12 * 60 * 1000 }) {
+  return await new Promise((resolve) => {
+    const child = spawn(cmd, args, {
+      cwd,
+      env: { ...process.env, CI: "1" },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+    }, timeoutMs);
+
+    child.stdout.on("data", (d) => {
+      stdout += String(d || "");
+    });
+    child.stderr.on("data", (d) => {
+      stderr += String(d || "");
+    });
+
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve({
+        ok: Number(code || 0) === 0 && !timedOut,
+        code: Number(code || 0),
+        timed_out: timedOut,
+        stdout,
+        stderr,
+      });
+    });
+  });
+}
+
+function parseTrailingJson(text) {
+  const raw = String(text || "").trim();
+  if (!raw) return null;
+  for (let i = raw.lastIndexOf("{"); i >= 0; i = raw.lastIndexOf("{", i - 1)) {
+    try {
+      return JSON.parse(raw.slice(i));
+    } catch {
+      // keep scanning
+    }
+  }
+  return null;
+}
+
+function authMiddleware(apiKey) {
+  return (req, res, next) => {
+    if (!apiKey) return next();
+    const authHeader = String(req.headers.authorization || "");
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
+    if (!token || token !== apiKey) return res.status(401).json({ ok: false, error: "unauthorized" });
+    return next();
+  };
+}
+
+async function githubSearch({ query, perPage, githubToken }) {
   const headers = {
     Accept: "application/vnd.github+json",
     "User-Agent": "inayanbuilderbot-masterpiece",
   };
-  if (GITHUB_TOKEN) headers.Authorization = `Bearer ${GITHUB_TOKEN}`;
+  if (githubToken) headers.Authorization = `Bearer ${githubToken}`;
 
   const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(query)}&sort=stars&order=desc&per_page=${Math.max(1, Math.min(30, perPage))}`;
   const r = await fetch(url, { headers });
-  if (!r.ok) throw new Error(`github_search_failed:${r.status}`);
+  if (!r.ok) {
+    const body = await r.text();
+    throw new Error(`github_search_failed:${r.status}:${body.slice(0, 200)}`);
+  }
   const data = await r.json();
   return Array.isArray(data.items) ? data.items : [];
 }
 
 function computeUiEvidence(repo) {
-  const desc = `${repo.description || ""} ${(repo.topics || []).join(" ")}`.toLowerCase();
-  let evidence = 0;
-  const hits = [];
+  const text = `${repo.name || ""} ${repo.description || ""} ${(repo.topics || []).join(" ")}`.toLowerCase();
   const checks = [
     ["dashboard", 3],
     ["chat", 3],
-    ["ui", 2],
-    ["web", 1],
+    ["web ui", 2],
     ["admin", 2],
-    ["agent", 1],
+    ["nextjs", 1],
+    ["react", 1],
+    ["workflow", 1],
   ];
-  for (const [k, w] of checks) {
-    if (desc.includes(k)) {
-      evidence += w;
-      hits.push(k);
+  let evidence = 0;
+  const hits = [];
+  for (const [term, weight] of checks) {
+    if (text.includes(term)) {
+      evidence += weight;
+      hits.push(term);
     }
   }
   return { evidence, hits };
 }
 
 function scoreRepo(repo) {
-  const stars = Number(repo.stargazers_count || 0);
-  const forks = Number(repo.forks_count || 0);
+  const stars = Number(repo.stargazers_count || repo.stars || 0);
+  const forks = Number(repo.forks_count || repo.forks || 0);
   const updatedAt = Date.parse(repo.pushed_at || 0);
   const recencyDays = Number.isFinite(updatedAt) ? Math.max(0, (Date.now() - updatedAt) / 86400000) : 9999;
-  const recencyScore = Math.max(0, 20 - Math.min(20, recencyDays / 14));
+  const recencyScore = Math.max(0, 25 - Math.min(25, recencyDays / 10));
   const ui = computeUiEvidence(repo);
 
-  const frameworkOnly = /(sdk|framework|runtime|toolkit|library)/i.test(`${repo.name} ${repo.description || ""}`)
-    && ui.evidence < 4;
+  const frameworkOnly = /(sdk|framework|runtime|toolkit|library|engine)/i.test(`${repo.name || ""} ${repo.description || ""}`)
+    && ui.evidence < 5;
 
-  const base = Math.log10(Math.max(1, stars)) * 40 + Math.log10(Math.max(1, forks + 1)) * 10 + recencyScore + ui.evidence * 4;
-  const penalty = frameworkOnly ? 20 : 0;
-  const score = Math.round((base - penalty) * 100) / 100;
+  const score =
+    Math.log10(Math.max(1, stars)) * 42 +
+    Math.log10(Math.max(1, forks + 1)) * 10 +
+    recencyScore +
+    ui.evidence * 4 -
+    (frameworkOnly ? 22 : 0);
 
   return {
-    score,
+    score: Math.round(score * 100) / 100,
     uiEvidence: ui.evidence,
     uiHits: ui.hits,
     frameworkOnly,
   };
 }
 
+function benchmarkRepos(repos, weightUi = 0.58, weightPopularity = 0.42) {
+  const maxStars = Math.max(...repos.map((r) => Number(r.stars || r.stargazers_count || 0)), 1);
+  return repos
+    .map((r) => {
+      const uiNorm = Math.min(1, Number(r.uiEvidence || 0) / 14);
+      const popNorm = Number(r.stars || r.stargazers_count || 0) / maxStars;
+      const benchmarkScore = Math.round((uiNorm * weightUi + popNorm * weightPopularity) * 10000) / 100;
+      return { ...r, benchmarkScore };
+    })
+    .sort((a, b) => b.benchmarkScore - a.benchmarkScore);
+}
+
 const ScoutSchema = z.object({
-  queries: z.array(z.string().min(3)).min(1).max(8),
+  queries: z.array(z.string().min(3)).min(1).max(10),
   perQuery: z.number().int().min(5).max(30).default(15),
   minStars: z.number().int().min(100).default(500),
-  topK: z.number().int().min(3).max(25).default(10),
-});
-
-app.post("/api/v1/scout/run", authMiddleware, async (req, res) => {
-  const parsed = ScoutSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
-
-  const p = parsed.data;
-  const all = [];
-  for (const q of p.queries) {
-    const repos = await githubSearch(q, p.perQuery);
-    for (const r of repos) {
-      if (r.archived || r.disabled) continue;
-      if (Number(r.stargazers_count || 0) < p.minStars) continue;
-      all.push(r);
-    }
-  }
-
-  const dedup = new Map();
-  for (const r of all) {
-    const key = String(r.full_name || "").toLowerCase();
-    if (!key || dedup.has(key)) continue;
-    const s = scoreRepo(r);
-    if (s.frameworkOnly) continue;
-    if (s.uiEvidence < 4) continue;
-    dedup.set(key, {
-      full_name: r.full_name,
-      html_url: r.html_url,
-      description: r.description || "",
-      stars: Number(r.stargazers_count || 0),
-      forks: Number(r.forks_count || 0),
-      language: r.language || null,
-      pushed_at: r.pushed_at || null,
-      score: s.score,
-      uiEvidence: s.uiEvidence,
-      uiHits: s.uiHits,
-      topics: Array.isArray(r.topics) ? r.topics : [],
-    });
-  }
-
-  const ranked = [...dedup.values()].sort((a, b) => b.score - a.score).slice(0, p.topK);
-  const run = { id: safeNowId("scout"), type: "scout", createdAt: new Date().toISOString(), payload: p, output: ranked };
-  runHistory.unshift(run);
-  if (runHistory.length > 60) runHistory.length = 60;
-
-  return res.json({ ok: true, runId: run.id, count: ranked.length, repos: ranked });
+  topK: z.number().int().min(3).max(30).default(12),
+  seedRepos: z
+    .array(
+      z.object({
+        full_name: z.string(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        stargazers_count: z.number().optional(),
+        forks_count: z.number().optional(),
+        pushed_at: z.string().optional(),
+        topics: z.array(z.string()).optional(),
+      })
+    )
+    .optional(),
 });
 
 const BenchmarkSchema = z.object({
   repos: z.array(z.object({
     full_name: z.string(),
     stars: z.number().optional(),
-    score: z.number().optional(),
+    stargazers_count: z.number().optional(),
     uiEvidence: z.number().optional(),
-  })).min(1).max(25),
-  weight_ui: z.number().min(0).max(1).default(0.55),
-  weight_popularity: z.number().min(0).max(1).default(0.45),
+  })).min(1).max(30),
+  weight_ui: z.number().min(0).max(1).default(0.58),
+  weight_popularity: z.number().min(0).max(1).default(0.42),
 });
 
-app.post("/api/v1/benchmark/run", authMiddleware, (req, res) => {
-  const parsed = BenchmarkSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
-
-  const p = parsed.data;
-  const wUi = p.weight_ui;
-  const wPop = p.weight_popularity;
-
-  const maxStars = Math.max(...p.repos.map((r) => Number(r.stars || 0)), 1);
-  const scored = p.repos.map((r) => {
-    const ui = Number(r.uiEvidence || 0) / 12;
-    const pop = Number(r.stars || 0) / maxStars;
-    const normalized = Math.round((ui * wUi + pop * wPop) * 10000) / 100;
-    return {
-      ...r,
-      benchmarkScore: normalized,
-    };
-  }).sort((a, b) => b.benchmarkScore - a.benchmarkScore);
-
-  const run = { id: safeNowId("bench"), type: "benchmark", createdAt: new Date().toISOString(), payload: p, output: scored };
-  runHistory.unshift(run);
-  if (runHistory.length > 60) runHistory.length = 60;
-
-  return res.json({ ok: true, runId: run.id, compared: scored.length, ranked: scored });
+const MasterpieceBuildSchema = z.object({
+  productName: z.string().min(2).max(120),
+  userGoal: z.string().min(10).max(4000),
+  selectedRepos: z.array(z.object({ full_name: z.string(), benchmarkScore: z.number().optional() })).min(1).max(12),
+  stack: z.array(z.string().min(1).max(80)).min(1).max(20),
 });
 
-const BuildSchema = z.object({
-  productName: z.string().min(2).max(100),
-  userGoal: z.string().min(10).max(3000),
-  selectedRepos: z.array(z.object({ full_name: z.string(), benchmarkScore: z.number().optional() })).min(1).max(10),
-  stack: z.array(z.string().min(1).max(40)).min(1).max(12),
-});
-
-app.post("/api/v1/masterpiece/build", authMiddleware, (req, res) => {
-  const parsed = BuildSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
-
-  const p = parsed.data;
-  const rankedRepos = [...p.selectedRepos].sort((a, b) => Number(b.benchmarkScore || 0) - Number(a.benchmarkScore || 0));
-
-  const blueprint = {
-    productName: p.productName,
-    dedication: "Dedicated to Suro Jason Inaya.",
-    objective: p.userGoal,
-    foundation: {
-      basedOn: "OpenClaw benchmark-first masterpiece workflow",
-      topReferences: rankedRepos.slice(0, 5).map((r) => r.full_name),
-      stack: p.stack,
-    },
-    buildPlan: [
-      {
-        phase: "Phase 1: Research + Lock",
-        actions: [
-          "Scout proven OSS repos with dashboard/chat modules",
-          "Benchmark and prioritize by proven UI + adoption",
-          "Lock architecture and reject framework-only low-signal patterns"
-        ]
-      },
-      {
-        phase: "Phase 2: Masterpiece Build",
-        actions: [
-          "Implement dashboard command center",
-          "Implement integrated chat tool",
-          "Add orchestration API and run history"
-        ]
-      },
-      {
-        phase: "Phase 3: Ship",
-        actions: [
-          "Run secret and security gates",
-          "Run tests and smoke checks",
-          "Publish install/ops/readme paperwork"
-        ]
-      }
-    ],
-    generatedAt: new Date().toISOString(),
-  };
-
-  const run = { id: safeNowId("masterpiece"), type: "masterpiece", createdAt: new Date().toISOString(), payload: p, output: blueprint };
-  runHistory.unshift(run);
-  if (runHistory.length > 60) runHistory.length = 60;
-
-  return res.json({ ok: true, runId: run.id, blueprint });
+const PipelineSchema = z.object({
+  productName: z.string().min(2).max(120),
+  userGoal: z.string().min(10).max(4000),
+  stack: z.array(z.string().min(1).max(80)).min(1).max(20),
+  queries: z.array(z.string().min(3)).min(1).max(10),
+  minStars: z.number().int().min(100).max(500000).default(500),
+  topK: z.number().int().min(3).max(30).default(10),
+  runExternal: z.boolean().default(true),
+  seedRepos: ScoutSchema.shape.seedRepos,
 });
 
 const ChatSchema = z.object({
-  message: z.string().min(2).max(2000),
+  message: z.string().min(2).max(3000),
   context: z.object({
     productName: z.string().optional(),
     stack: z.array(z.string()).optional(),
   }).optional(),
 });
 
-app.post("/api/v1/chat/reply", authMiddleware, (req, res) => {
-  const parsed = ChatSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+export function createApp() {
+  ensureDataStore();
 
-  const { message, context } = parsed.data;
-  const lower = message.toLowerCase();
+  const app = express();
+  const NODE_ENV = process.env.NODE_ENV || "development";
+  const API_KEY = (process.env.BUILDERBOT_API_KEY || "").trim();
+  const ALLOWED_ORIGIN = (process.env.ALLOWED_ORIGIN || "").trim();
+  const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 60000);
+  const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX || 60);
+  const GITHUB_TOKEN = (process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "").trim();
 
-  let reply = "I can help you refine the masterpiece build. Ask for architecture, repo selection, benchmark weighting, or release checklist.";
-  if (lower.includes("architecture")) {
-    reply = "Architecture recommendation: split into dashboard-ui, chat-runtime, and orchestration-api modules with explicit contracts and test gates.";
-  } else if (lower.includes("security") || lower.includes("secret")) {
-    reply = "Security recommendation: enforce API key auth, origin allowlist, secret scan on every push, and no plaintext secrets in repo history.";
-  } else if (lower.includes("benchmark")) {
-    reply = "Benchmark recommendation: weight UI evidence and adoption, and exclude framework-only repos lacking dashboard/chat modules.";
-  }
+  app.disable("x-powered-by");
+  app.use(helmet());
+  app.use(express.json({ limit: "1mb" }));
+  app.use(rateLimit({ windowMs: RATE_LIMIT_WINDOW_MS, max: RATE_LIMIT_MAX, standardHeaders: true, legacyHeaders: false }));
+  app.use((req, res, next) => {
+    if (ALLOWED_ORIGIN && req.headers.origin === ALLOWED_ORIGIN) {
+      res.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
+      res.setHeader("Vary", "Origin");
+    }
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    if (req.method === "OPTIONS") return res.sendStatus(204);
+    return next();
+  });
 
-  const record = {
-    id: safeNowId("chat"),
-    at: new Date().toISOString(),
-    message,
-    context: context || null,
-    reply,
-  };
+  app.use(express.static(publicDir));
 
-  chatHistory.unshift(record);
-  if (chatHistory.length > 120) chatHistory.length = 120;
+  const requireAuth = authMiddleware(API_KEY);
 
-  return res.json({ ok: true, reply, chat: record });
-});
+  app.post("/api/v1/scout/run", requireAuth, async (req, res) => {
+    try {
+      const parsed = ScoutSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
 
-app.get("/api/v1/chat/history", authMiddleware, (_req, res) => {
-  return res.json({ ok: true, count: chatHistory.length, history: chatHistory });
-});
+      const p = parsed.data;
+      const discovered = [];
+      if (Array.isArray(p.seedRepos) && p.seedRepos.length > 0) {
+        discovered.push(...p.seedRepos);
+      } else {
+        for (const q of p.queries) {
+          const items = await githubSearch({ query: q, perPage: p.perQuery, githubToken: GITHUB_TOKEN });
+          for (const item of items) {
+            if (item.archived || item.disabled) continue;
+            if (Number(item.stargazers_count || 0) < p.minStars) continue;
+            discovered.push(item);
+          }
+        }
+      }
 
-app.get("/api/v1/runs", authMiddleware, (_req, res) => {
-  return res.json({ ok: true, count: runHistory.length, runs: runHistory });
-});
+      const dedup = new Map();
+      for (const repo of discovered) {
+        const key = String(repo.full_name || "").toLowerCase();
+        if (!key || dedup.has(key)) continue;
+        const scored = scoreRepo(repo);
+        if (scored.frameworkOnly) continue;
+        if (scored.uiEvidence < 5) continue;
+        dedup.set(key, {
+          full_name: repo.full_name,
+          name: repo.name,
+          html_url: repo.html_url,
+          description: repo.description || "",
+          stars: Number(repo.stargazers_count || 0),
+          forks: Number(repo.forks_count || 0),
+          language: repo.language || null,
+          pushed_at: repo.pushed_at || null,
+          topics: Array.isArray(repo.topics) ? repo.topics : [],
+          score: scored.score,
+          uiEvidence: scored.uiEvidence,
+          uiHits: scored.uiHits,
+        });
+      }
 
-app.get("/health", (_req, res) => {
-  res.json({ ok: true, service: "inayanbuilderbot-masterpiece", env: NODE_ENV, time: new Date().toISOString() });
-});
+      const repos = [...dedup.values()].sort((a, b) => b.score - a.score).slice(0, p.topK);
+      const run = { id: nowId("scout"), type: "scout", createdAt: new Date().toISOString(), payload: p, output: repos };
+      appState.runs.unshift(run);
+      trimHistory();
+      persistDataStore();
 
-app.get("/", (_req, res) => {
-  const fp = path.join(publicDir, "index.html");
-  if (!fs.existsSync(fp)) return res.status(404).send("Dashboard missing");
-  return res.sendFile(fp);
-});
+      return res.json({ ok: true, runId: run.id, count: repos.length, repos });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: "scout_failed", detail: String(err?.message || err) });
+    }
+  });
 
-app.use((err, _req, res, _next) => {
-  console.error("Unhandled error:", err?.message || err);
-  return res.status(500).json({ ok: false, error: "internal_error" });
-});
+  app.post("/api/v1/benchmark/run", requireAuth, (req, res) => {
+    const parsed = BenchmarkSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
 
-return app;
+    const p = parsed.data;
+    const ranked = benchmarkRepos(p.repos, p.weight_ui, p.weight_popularity);
+    const run = { id: nowId("bench"), type: "benchmark", createdAt: new Date().toISOString(), payload: p, output: ranked };
+    appState.runs.unshift(run);
+    trimHistory();
+    persistDataStore();
+
+    return res.json({ ok: true, runId: run.id, compared: ranked.length, ranked });
+  });
+
+  app.post("/api/v1/masterpiece/build", requireAuth, (req, res) => {
+    const parsed = MasterpieceBuildSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+
+    const p = parsed.data;
+    const rankedRepos = [...p.selectedRepos].sort((a, b) => Number(b.benchmarkScore || 0) - Number(a.benchmarkScore || 0));
+
+    const blueprint = {
+      productName: p.productName,
+      dedication: "Dedicated to Suro Jason Inaya.",
+      objective: p.userGoal,
+      foundation: {
+        basedOn: "OpenClaw benchmark-first masterpiece workflow",
+        topReferences: rankedRepos.slice(0, 6).map((r) => r.full_name),
+        stack: p.stack,
+      },
+      buildPlan: [
+        {
+          phase: "Phase 1: Index + Research Lock",
+          actions: [
+            "Index target codebases and local mirrors",
+            "Scout proven dashboard/chat repos",
+            "Benchmark compare and lock top architectures"
+          ]
+        },
+        {
+          phase: "Phase 2: Production Build",
+          actions: [
+            "Build dashboard command center",
+            "Build integrated chat tool",
+            "Implement orchestration API + run artifacts"
+          ]
+        },
+        {
+          phase: "Phase 3: Hardening + Release",
+          actions: [
+            "Run security and secrets gates",
+            "Run tests and smoke checks",
+            "Publish installation + operations paperwork"
+          ]
+        }
+      ],
+      generatedAt: new Date().toISOString(),
+    };
+
+    const run = { id: nowId("masterpiece"), type: "masterpiece", createdAt: new Date().toISOString(), payload: p, output: blueprint };
+    appState.runs.unshift(run);
+    trimHistory();
+    persistDataStore();
+
+    return res.json({ ok: true, runId: run.id, blueprint });
+  });
+
+  app.post("/api/v1/masterpiece/pipeline/run", requireAuth, async (req, res) => {
+    const parsed = PipelineSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+
+    const p = parsed.data;
+    const runId = nowId("pipeline");
+    const startedAt = new Date().toISOString();
+    const stageResults = [];
+
+    const scoutPayload = {
+      queries: p.queries,
+      perQuery: 15,
+      minStars: p.minStars,
+      topK: p.topK,
+      seedRepos: p.seedRepos,
+    };
+
+    let scoutRepos = [];
+    try {
+      const discovered = [];
+      if (Array.isArray(p.seedRepos) && p.seedRepos.length > 0) {
+        discovered.push(...p.seedRepos);
+      } else {
+        for (const q of p.queries) {
+          const items = await githubSearch({ query: q, perPage: 15, githubToken: GITHUB_TOKEN });
+          discovered.push(...items);
+        }
+      }
+
+      const dedup = new Map();
+      for (const repo of discovered) {
+        const key = String(repo.full_name || "").toLowerCase();
+        if (!key || dedup.has(key)) continue;
+        const scored = scoreRepo(repo);
+        if (Number(repo.stargazers_count || 0) < p.minStars) continue;
+        if (scored.frameworkOnly || scored.uiEvidence < 5) continue;
+        dedup.set(key, {
+          full_name: repo.full_name,
+          name: repo.name,
+          html_url: repo.html_url,
+          description: repo.description || "",
+          stars: Number(repo.stargazers_count || 0),
+          forks: Number(repo.forks_count || 0),
+          language: repo.language || null,
+          pushed_at: repo.pushed_at || null,
+          topics: Array.isArray(repo.topics) ? repo.topics : [],
+          score: scored.score,
+          uiEvidence: scored.uiEvidence,
+          uiHits: scored.uiHits,
+        });
+      }
+      scoutRepos = [...dedup.values()].sort((a, b) => b.score - a.score).slice(0, p.topK);
+      stageResults.push({ stage: "scout", ok: true, detail: { count: scoutRepos.length, payload: scoutPayload } });
+    } catch (err) {
+      stageResults.push({ stage: "scout", ok: false, detail: { error: String(err?.message || err), payload: scoutPayload } });
+    }
+
+    let benchmarkRanked = [];
+    if (scoutRepos.length > 0) {
+      benchmarkRanked = benchmarkRepos(scoutRepos, 0.58, 0.42);
+      stageResults.push({ stage: "benchmark", ok: true, detail: { count: benchmarkRanked.length } });
+    } else {
+      stageResults.push({ stage: "benchmark", ok: false, detail: { error: "no_scout_repos" } });
+    }
+
+    if (p.runExternal) {
+      const rootExists = fs.existsSync(CLAW_ARCHITECT_ROOT);
+      if (!rootExists) {
+        stageResults.push({ stage: "external_indexing", ok: false, detail: { error: `missing_path:${CLAW_ARCHITECT_ROOT}` } });
+      } else {
+        const extSteps = [
+          { name: "index_sync", cmd: "npm", args: ["run", "-s", "index:sync:agent"] },
+          { name: "repo_readiness", cmd: "npm", args: ["run", "-s", "repo:readiness:pulse", "--", "--min-score", "80", "--limit", "20"] },
+          { name: "dashboard_scout", cmd: "npm", args: ["run", "-s", "dashboard:repo:scout", "--", "--limit", String(Math.max(8, p.topK)), "--min-stars", String(p.minStars), "--per-query", "20", "--ui-probe-limit", "45"] },
+        ];
+
+        for (const s of extSteps) {
+          const r = await runCommand({ cmd: s.cmd, args: s.args, cwd: CLAW_ARCHITECT_ROOT, timeoutMs: 15 * 60 * 1000 });
+          const parsedJson = parseTrailingJson(`${r.stdout}\n${r.stderr}`);
+          stageResults.push({
+            stage: `external_${s.name}`,
+            ok: r.ok,
+            detail: {
+              code: r.code,
+              timed_out: r.timed_out,
+              parsed: parsedJson,
+              stdout_tail: String(r.stdout || "").slice(-1200),
+              stderr_tail: String(r.stderr || "").slice(-1200),
+            },
+          });
+        }
+      }
+    }
+
+    const selectedRepos = benchmarkRanked.slice(0, Math.min(6, benchmarkRanked.length)).map((r) => ({
+      full_name: r.full_name,
+      benchmarkScore: r.benchmarkScore,
+    }));
+
+    const blueprint = {
+      productName: p.productName,
+      dedication: "Dedicated to Suro Jason Inaya.",
+      objective: p.userGoal,
+      stack: p.stack,
+      selectedRepos,
+      summary: {
+        scout_count: scoutRepos.length,
+        benchmark_count: benchmarkRanked.length,
+        external_stages: stageResults.filter((s) => s.stage.startsWith("external_")).length,
+      },
+      generatedAt: new Date().toISOString(),
+    };
+
+    const ok = stageResults.every((s) => s.ok || s.stage.startsWith("external_"));
+    const run = {
+      id: runId,
+      type: "pipeline",
+      createdAt: startedAt,
+      payload: p,
+      output: {
+        ok,
+        stageResults,
+        scout: scoutRepos,
+        benchmark: benchmarkRanked,
+        blueprint,
+      },
+    };
+
+    appState.runs.unshift(run);
+    trimHistory();
+    persistDataStore();
+
+    return res.json({ ok, runId, stageResults, scout: scoutRepos, benchmark: benchmarkRanked, blueprint });
+  });
+
+  app.post("/api/v1/chat/reply", requireAuth, (req, res) => {
+    const parsed = ChatSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+
+    const { message, context } = parsed.data;
+    const m = message.toLowerCase();
+
+    const latestPipeline = appState.runs.find((r) => r.type === "pipeline");
+    const topRepoText = latestPipeline?.output?.blueprint?.selectedRepos?.length
+      ? `Latest top repos: ${latestPipeline.output.blueprint.selectedRepos.map((r) => r.full_name).slice(0, 3).join(", ")}.`
+      : "No pipeline run yet. Run the Masterpiece pipeline first.";
+
+    let reply = "I can help with architecture, benchmark weighting, indexing workflow, and release hardening.";
+    if (m.includes("index")) {
+      reply = `Use the full pipeline endpoint to run index sync + readiness + repo scout before build. ${topRepoText}`;
+    } else if (m.includes("benchmark")) {
+      reply = `Benchmark should prioritize UI evidence + adoption and reject framework-only repos with weak dashboard/chat evidence. ${topRepoText}`;
+    } else if (m.includes("security") || m.includes("secret")) {
+      reply = "Security baseline: API key auth, origin allowlist, rate limiting, input validation, and secret scan before each push.";
+    } else if (m.includes("build") || m.includes("masterpiece")) {
+      reply = `Masterpiece guidance: lock architecture after benchmark, then build dashboard+chat, then ship with gates. ${topRepoText}`;
+    }
+
+    const chat = {
+      id: nowId("chat"),
+      at: new Date().toISOString(),
+      message,
+      context: context || null,
+      reply,
+    };
+    appState.chats.unshift(chat);
+    trimHistory();
+    persistDataStore();
+
+    return res.json({ ok: true, reply, chat });
+  });
+
+  app.get("/api/v1/chat/history", requireAuth, (_req, res) => {
+    return res.json({ ok: true, count: appState.chats.length, history: appState.chats });
+  });
+
+  app.get("/api/v1/runs", requireAuth, (_req, res) => {
+    return res.json({ ok: true, count: appState.runs.length, runs: appState.runs });
+  });
+
+  app.get("/health", (_req, res) => {
+    return res.json({
+      ok: true,
+      service: "inayanbuilderbot-masterpiece",
+      env: NODE_ENV,
+      claw_architect_root: CLAW_ARCHITECT_ROOT,
+      time: new Date().toISOString(),
+    });
+  });
+
+  app.get("/", (_req, res) => {
+    const fp = path.join(publicDir, "index.html");
+    if (!fs.existsSync(fp)) return res.status(404).send("Dashboard missing");
+    return res.sendFile(fp);
+  });
+
+  app.use((err, _req, res, _next) => {
+    console.error("Unhandled error:", err?.message || err);
+    return res.status(500).json({ ok: false, error: "internal_error" });
+  });
+
+  return app;
 }
 
 export function startServer(port = DEFAULT_PORT) {
