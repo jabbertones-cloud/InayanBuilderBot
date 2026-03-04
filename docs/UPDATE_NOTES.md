@@ -19,6 +19,21 @@
   - one-click provider status view
 - Health endpoint now includes `chat_provider_count`.
 
+### Full Upgrade Bundle (Streaming, Sessions, Deploy, Metrics, E2E)
+
+- Added `POST /api/v1/chat/reply/stream` (SSE) with `start`, `chunk`, `done`, `error` events.
+- Added persistent multi-conversation chat sessions:
+  - `GET /api/v1/chat/sessions`
+  - `GET /api/v1/chat/sessions/:sessionId`
+  - Optional `sessionId` in chat requests.
+- Added provider latency/cost/success tracking and auto-routing improvements in `provider=auto`.
+- Added one-click deployment assets:
+  - `Dockerfile`
+  - `docker-compose.yml`
+  - `.dockerignore`
+- Added end-to-end smoke test:
+  - `tests/e2e.smoke.test.js`
+
 ### Environment Alias Support
 
 Additional environment variable aliases are now accepted:
