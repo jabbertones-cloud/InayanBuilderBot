@@ -30,6 +30,11 @@ const appState = {
   projectMemory: {},
 };
 
+const MAGIC_RUN_SCOUT_CACHE = new Map();
+const MAGIC_RUN_BENCH_CACHE = new Map();
+const MAGIC_RUN_CACHE_TTL_MS = Number(process.env.MAGIC_RUN_CACHE_TTL_MS || 10 * 60 * 1000);
+const MAGIC_RUN_MAX_BUDGET_USD = Number(process.env.MAGIC_RUN_MAX_BUDGET_USD || 25000);
+
 function ensureDataStore() {
   fs.mkdirSync(dataDir, { recursive: true });
   if (!fs.existsSync(runsFile)) {
@@ -476,6 +481,8 @@ function buildExecutionBridge(blueprint) {
       priority: 1,
       owner: "backend",
       title: "Implement magic-run deterministic orchestrator",
+      estimateHours: 6,
+      dependencies: [],
       acceptance_criteria: [
         "Endpoint exists and returns deterministic plan hash.",
         "Run completes in target latency envelope.",
@@ -485,6 +492,8 @@ function buildExecutionBridge(blueprint) {
       priority: 2,
       owner: "backend",
       title: "Implement quality gate + auto-repair",
+      estimateHours: 5,
+      dependencies: ["Implement magic-run deterministic orchestrator"],
       acceptance_criteria: [
         "Plans below threshold return remediation and repaired output.",
         "Evaluation scores attached to every plan response.",
@@ -494,6 +503,8 @@ function buildExecutionBridge(blueprint) {
       priority: 3,
       owner: "frontend",
       title: "Add interactive plan editor with diff",
+      estimateHours: 8,
+      dependencies: ["Implement quality gate + auto-repair"],
       acceptance_criteria: [
         "Users can edit budget/deadline/team-size and recompile.",
         "Diff view highlights changed phases and tasks.",
@@ -503,6 +514,8 @@ function buildExecutionBridge(blueprint) {
       priority: 4,
       owner: "platform",
       title: "Persist project memory and replay in subsequent runs",
+      estimateHours: 6,
+      dependencies: ["Implement magic-run deterministic orchestrator"],
       acceptance_criteria: [
         "Project memory API returns prior decisions and rejected options.",
         "Recompile endpoint consumes memory automatically.",
@@ -515,12 +528,124 @@ function buildExecutionBridge(blueprint) {
       total_tasks: tasks.length,
       must_pass: tasks.filter((t) => t.priority <= 2).length,
     },
+    exports: {
+      jira: {
+        issues: tasks.map((t) => ({
+          summary: t.title,
+          description: `Owner: ${t.owner}\nEstimate: ${t.estimateHours}h\nDependencies: ${(t.dependencies || []).join(", ") || "none"}\nAcceptance:\n- ${t.acceptance_criteria.join("\n- ")}`,
+          labels: ["magic-run", "execution-bridge", `owner-${t.owner}`],
+          priority: t.priority <= 2 ? "High" : "Medium",
+        })),
+      },
+      linear: {
+        tasks: tasks.map((t) => ({
+          title: t.title,
+          description: `Estimate: ${t.estimateHours}h\nDependencies: ${(t.dependencies || []).join(", ") || "none"}`,
+          assigneeTeam: t.owner,
+          priority: t.priority,
+          acceptanceCriteria: t.acceptance_criteria,
+        })),
+      },
+      github: {
+        issues: tasks.map((t) => ({
+          title: `[P${t.priority}] ${t.title}`,
+          body: [
+            `Owner: ${t.owner}`,
+            `Estimate: ${t.estimateHours}h`,
+            `Dependencies: ${(t.dependencies || []).join(", ") || "none"}`,
+            "",
+            "## Acceptance Criteria",
+            ...t.acceptance_criteria.map((x) => `- [ ] ${x}`),
+          ].join("\n"),
+          labels: ["magic-run", `owner:${t.owner}`],
+        })),
+      },
+    },
     derived_from: {
       productName: blueprint?.productName || null,
       confidence: blueprint?.confidence || null,
     },
   };
 }
+
+function getCache(cache, key) {
+  const hit = cache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > MAGIC_RUN_CACHE_TTL_MS) {
+    cache.delete(key);
+    return null;
+  }
+  return hit.value;
+}
+
+function setCache(cache, key, value) {
+  cache.set(key, { at: Date.now(), value });
+}
+
+function topViralBenchmarkSeeds(limit = 12) {
+  const repos = loadBuiltinRepoIndex();
+  return repos
+    .filter((r) => Array.isArray(r.categories) && r.categories.includes("viral_oss_benchmark"))
+    .sort((a, b) => Number(b.stars || b.stargazers_count || 0) - Number(a.stars || a.stargazers_count || 0))
+    .slice(0, limit)
+    .map((r) => normalizeRepoForScoring(r));
+}
+
+function buildDecisionCitations({ selectedRepos, evidence }) {
+  const githubTop = Array.isArray(evidence?.github) ? evidence.github.slice(0, 5) : [];
+  const redditTop = Array.isArray(evidence?.reddit) ? evidence.reddit.slice(0, 5) : [];
+  return {
+    repo_selection: selectedRepos.map((r) => ({
+      repo: r.full_name,
+      citations: [
+        ...githubTop.slice(0, 2).map((x) => ({ type: "github", title: x.title, url: x.url })),
+        ...redditTop.slice(0, 1).map((x) => ({ type: "reddit", title: x.title, url: x.url })),
+      ],
+    })),
+    risk_and_rollout: [
+      ...githubTop.slice(0, 2).map((x) => ({ type: "github", title: x.title, url: x.url })),
+      ...redditTop.slice(0, 2).map((x) => ({ type: "reddit", title: x.title, url: x.url })),
+    ],
+  };
+}
+
+const CitationSchema = z.object({
+  type: z.enum(["github", "reddit"]),
+  title: z.string().min(3),
+  url: z.string().url(),
+});
+
+const ExecutionTaskSchema = z.object({
+  priority: z.number().int().min(1).max(5),
+  owner: z.string().min(2),
+  title: z.string().min(4),
+  estimateHours: z.number().min(0.5).max(200),
+  dependencies: z.array(z.string()).default([]),
+  acceptance_criteria: z.array(z.string().min(4)).min(1),
+});
+
+const BlueprintSchema = z.object({
+  productName: z.string().min(2),
+  objective: z.string().min(10),
+  stack: z.array(z.string().min(1)).min(1),
+  selectedRepos: z.array(z.object({ full_name: z.string() })).min(1),
+  confidence: z.number().min(0).max(1),
+  assumptions: z.array(z.string()).min(1),
+  executable: z.object({
+    filePlan: z.array(z.object({ path: z.string().min(3), purpose: z.string().min(3) })).min(1),
+    apiContracts: z.array(z.object({ method: z.string().min(3), path: z.string().min(3), body: z.string().min(1) })).min(1),
+    dbMigrations: z.array(z.string().min(10)).min(1),
+    testPlan: z.array(z.string().min(6)).min(1),
+    rollout: z.array(z.string().min(6)).min(1),
+  }),
+  decisionCitations: z.object({
+    repo_selection: z.array(z.object({
+      repo: z.string(),
+      citations: z.array(CitationSchema).min(1),
+    })).min(1),
+    risk_and_rollout: z.array(CitationSchema).min(1),
+  }),
+});
 
 async function checkGithubToken(token) {
   const t = String(token || "").trim();
@@ -1987,6 +2112,8 @@ const MagicRunSchema = z.object({
   productName: z.string().min(2).max(120).default("InayanBuilder"),
   userGoal: z.string().min(10).max(4000),
   stack: z.array(z.string().min(1).max(80)).min(1).max(20).default(["node", "typescript", "postgres", "react"]),
+  idempotencyKey: z.string().min(8).max(120).optional(),
+  timeoutTier: z.enum(["fast", "standard", "deep"]).default("fast"),
   constraints: z.object({
     budgetUsd: z.number().int().min(0).max(500000).default(5000),
     deadlineDays: z.number().int().min(1).max(365).default(14),
@@ -2881,39 +3008,79 @@ export function createApp() {
     if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
 
     const p = parsed.data;
+    if (Number(p?.constraints?.budgetUsd || 0) > MAGIC_RUN_MAX_BUDGET_USD) {
+      return res.status(400).json({
+        ok: false,
+        error: "budget_cap_exceeded",
+        detail: `budgetUsd exceeds cap (${MAGIC_RUN_MAX_BUDGET_USD})`,
+      });
+    }
+
+    const idempotencyKey = String(p.idempotencyKey || "").trim();
+    if (idempotencyKey) {
+      const prior = appState.runs.find((r) => r.type === "magic_pipeline" && String(r?.payload?.idempotencyKey || "") === idempotencyKey);
+      if (prior?.output) {
+        return res.json({ ok: true, runId: prior.id, idempotentReplay: true, ...prior.output });
+      }
+    }
+
     const startedMs = Date.now();
     const queries = [
       `${p.productName} open source agent builder`,
       `${p.productName} dashboard chat workflow`,
       "best open source AI builder orchestration",
     ];
+    const timeoutTierConfig = {
+      fast: { perQuery: 12, topK: 10, maxResults: 30, redditLimit: 16 },
+      standard: { perQuery: 18, topK: 12, maxResults: 45, redditLimit: 24 },
+      deep: { perQuery: 24, topK: 14, maxResults: 60, redditLimit: 32 },
+    }[p.timeoutTier || "fast"];
 
-    let scoutRepos = [];
+    const seedRepos = topViralBenchmarkSeeds(12);
+    const scoutCacheKey = deterministicHash({
+      mode: "magic_scout",
+      timeoutTier: p.timeoutTier,
+      queries,
+      seedRepos: seedRepos.map((r) => r.full_name),
+    });
+
+    let scoutRepos = getCache(MAGIC_RUN_SCOUT_CACHE, scoutCacheKey) || [];
     try {
-      const discovered = await discoverScoutRepos({
-        queries,
-        perQuery: 15,
-        minStars: 500,
-        topK: 12,
-        seedRepos: [],
-        githubToken: GITHUB_TOKEN,
-      });
-      scoutRepos = deterministicRepoSort(discovered)
-        .filter((r) => Number(r.stargazers_count || r.stars || 0) >= 500)
-        .slice(0, 12)
-        .map((r) => ({
-          full_name: r.full_name,
-          name: r.name,
-          stars: Number(r.stargazers_count || r.stars || 0),
-          forks: Number(r.forks_count || r.forks || 0),
-          description: r.description || "",
-          topics: Array.isArray(r.topics) ? r.topics : [],
-        }));
+      if (!scoutRepos.length) {
+        const discovered = await discoverScoutRepos({
+          queries,
+          perQuery: timeoutTierConfig.perQuery,
+          minStars: 500,
+          topK: timeoutTierConfig.topK,
+          seedRepos,
+          githubToken: GITHUB_TOKEN,
+        });
+        scoutRepos = deterministicRepoSort(discovered)
+          .filter((r) => Number(r.stargazers_count || r.stars || 0) >= 500)
+          .slice(0, timeoutTierConfig.topK)
+          .map((r) => ({
+            full_name: r.full_name,
+            name: r.name,
+            stars: Number(r.stargazers_count || r.stars || 0),
+            forks: Number(r.forks_count || r.forks || 0),
+            description: r.description || "",
+            topics: Array.isArray(r.topics) ? r.topics : [],
+          }));
+        setCache(MAGIC_RUN_SCOUT_CACHE, scoutCacheKey, scoutRepos);
+      }
     } catch (err) {
       return res.status(502).json({ ok: false, error: "magic_scout_failed", detail: String(err?.message || err) });
     }
 
-    const benchmark = deterministicRepoSort(benchmarkRepos(scoutRepos, 0.62, 0.38)).slice(0, 10);
+    const benchCacheKey = deterministicHash({
+      mode: "magic_bench",
+      scout: scoutRepos.map((r) => [r.full_name, Number(r.stars || 0), Number(r.uiEvidence || 0)]),
+    });
+    let benchmark = getCache(MAGIC_RUN_BENCH_CACHE, benchCacheKey);
+    if (!benchmark) {
+      benchmark = deterministicRepoSort(benchmarkRepos(scoutRepos, 0.62, 0.38)).slice(0, timeoutTierConfig.topK);
+      setCache(MAGIC_RUN_BENCH_CACHE, benchCacheKey, benchmark);
+    }
 
     let githubReport = null;
     let redditReport = null;
@@ -2921,7 +3088,7 @@ export function createApp() {
       githubReport = await runGithubResearch({
         query: `${p.productName} ${p.userGoal}`.slice(0, 260),
         perPage: 20,
-        maxResults: 40,
+        maxResults: timeoutTierConfig.maxResults,
         githubToken: GITHUB_TOKEN,
       });
     } catch {
@@ -2931,9 +3098,9 @@ export function createApp() {
       redditReport = await runRedditResearch({
         query: `${p.productName} ${p.userGoal} builder workflow`.slice(0, 260),
         subreddits: REDDIT_DEFAULT_SUBREDDITS,
-        limitPerSubreddit: 20,
+        limitPerSubreddit: timeoutTierConfig.redditLimit,
         timeWindow: "year",
-        maxResults: 60,
+        maxResults: timeoutTierConfig.maxResults,
         redditUserAgent: REDDIT_USER_AGENT,
         redditAuthProfiles,
         redditRequestTimeoutMs: REDDIT_REQUEST_TIMEOUT_MS,
@@ -2955,6 +3122,7 @@ export function createApp() {
         : benchmark
     ).slice(0, 6);
     const evidence = buildEvidencePack({ githubReport, redditReport, fusion });
+    const decisionCitations = buildDecisionCitations({ selectedRepos, evidence });
 
     const baseBlueprint = buildExecutableBlueprint({
       productName: p.productName,
@@ -2964,6 +3132,7 @@ export function createApp() {
       evidence,
       constraints: p.constraints,
     });
+    baseBlueprint.decisionCitations = decisionCitations;
 
     let evaluation = evaluateBlueprint(baseBlueprint);
     const autoRepair = [];
@@ -2981,7 +3150,24 @@ export function createApp() {
       evaluation = evaluateBlueprint(blueprint);
     }
 
+    const blueprintValidation = BlueprintSchema.safeParse(blueprint);
+    if (!blueprintValidation.success) {
+      return res.status(422).json({
+        ok: false,
+        error: "blueprint_invalid",
+        details: blueprintValidation.error.flatten(),
+      });
+    }
+
     const executionBridge = buildExecutionBridge(blueprint);
+    const taskValidation = z.array(ExecutionTaskSchema).safeParse(executionBridge.tasks);
+    if (!taskValidation.success) {
+      return res.status(422).json({
+        ok: false,
+        error: "execution_tasks_invalid",
+        details: taskValidation.error.flatten(),
+      });
+    }
     const projectKey = normalizeProjectKey(p.productName);
     const planHash = deterministicHash({
       productName: p.productName,
@@ -2991,16 +3177,39 @@ export function createApp() {
       selectedRepos: selectedRepos.map((r) => r.full_name),
     });
 
-    const memory = appState.projectMemory[projectKey] || { decisions: [], rejected: [], constraints: {}, history: [] };
+    const memory = appState.projectMemory[projectKey] || {
+      decisions: [],
+      acceptedDecisions: [],
+      rejectedOptions: [],
+      hardConstraints: {},
+      constraints: {},
+      history: [],
+    };
     const updatedMemory = {
       ...memory,
       projectKey,
       updatedAt: new Date().toISOString(),
+      hardConstraints: {
+        ...(memory.hardConstraints || {}),
+        budgetUsd: p.constraints.budgetUsd,
+        deadlineDays: p.constraints.deadlineDays,
+        teamSize: p.constraints.teamSize,
+      },
       constraints: p.constraints,
       decisions: [
         ...memory.decisions.slice(-20),
         `Selected top repos: ${selectedRepos.map((r) => r.full_name).join(", ")}`,
       ].slice(-30),
+      acceptedDecisions: [
+        ...(Array.isArray(memory.acceptedDecisions) ? memory.acceptedDecisions.slice(-20) : []),
+        {
+          at: new Date().toISOString(),
+          decision: "repo_selection",
+          value: selectedRepos.map((r) => r.full_name),
+          citations: decisionCitations.repo_selection,
+        },
+      ].slice(-30),
+      rejectedOptions: Array.isArray(memory.rejectedOptions) ? memory.rejectedOptions.slice(-30) : [],
       history: [
         ...(Array.isArray(memory.history) ? memory.history.slice(-20) : []),
         { at: new Date().toISOString(), planHash, runType: "magic_run", score: evaluation.score },
@@ -3011,9 +3220,11 @@ export function createApp() {
 
     const output = {
       mode: "magic_run_v2",
+      productFocus: "deterministic_magic_run",
       planHash,
       deterministic: Boolean(p.deterministic),
       timeToFirstWowMs: Date.now() - startedMs,
+      qualityScore: evaluation.score,
       constraints: p.constraints,
       blueprint,
       evaluation,
@@ -3065,6 +3276,7 @@ export function createApp() {
     const prior = base.output || {};
     const mergedConstraints = {
       ...(prior.constraints || {}),
+      ...(appState.projectMemory[normalizeProjectKey(prior?.blueprint?.productName || "")]?.hardConstraints || {}),
       ...(p.constraints || {}),
     };
     const selectedRepos = deterministicRepoSort(prior?.blueprint?.selectedRepos || []).slice(0, 6);
@@ -3076,12 +3288,17 @@ export function createApp() {
       evidence: prior?.evidence || { github: [], reddit: [], fusion: [] },
       constraints: mergedConstraints,
     });
+    blueprint.decisionCitations = buildDecisionCitations({
+      selectedRepos,
+      evidence: prior?.evidence || { github: [], reddit: [], fusion: [] },
+    });
     const evaluation = evaluateBlueprint(blueprint);
     const executionBridge = buildExecutionBridge(blueprint);
     const diff = {
       constraints_before: prior.constraints || {},
       constraints_after: mergedConstraints,
       changed_fields: Object.keys(mergedConstraints).filter((k) => JSON.stringify((prior.constraints || {})[k]) !== JSON.stringify(mergedConstraints[k])),
+      memory_applied: appState.projectMemory[normalizeProjectKey(prior?.blueprint?.productName || "")]?.hardConstraints || {},
     };
     const planHash = deterministicHash({
       runId: p.runId,
@@ -3097,6 +3314,7 @@ export function createApp() {
       payload: p,
       output: {
         planHash,
+        qualityScore: evaluation.score,
         diff,
         blueprint,
         evaluation,
@@ -3107,6 +3325,68 @@ export function createApp() {
     trimHistory();
     persistDataStore();
     return res.json({ ok: true, runId: run.id, ...run.output });
+  });
+
+  app.get("/api/v1/masterpiece/magic-run/demo", requireAuth, (_req, res) => {
+    const selectedRepos = topViralBenchmarkSeeds(6).map((r) => ({
+      full_name: r.full_name,
+      benchmarkScore: roundNumber(Math.log10(Math.max(1, Number(r.stargazers_count || 1))) * 22, 2),
+    }));
+    const evidence = {
+      github: [
+        { title: "Open-source agent runtime patterns", rank_score: 0.91, url: "https://github.com/anthropics/claude-code" },
+        { title: "MCP ecosystem traction", rank_score: 0.89, url: "https://github.com/punkpeye/awesome-mcp-servers" },
+      ],
+      reddit: [
+        { title: "Practical MCP integrations with measurable utility", subreddit: "LocalLLaMA", rank_score: 0.85, url: "https://www.reddit.com/r/LocalLLaMA/" },
+      ],
+      fusion: selectedRepos.slice(0, 4).map((r) => ({ repo: r.full_name, score: Number(r.benchmarkScore || 0), reasons: ["high OSS signal"] })),
+    };
+    const decisionCitations = buildDecisionCitations({ selectedRepos, evidence });
+    const blueprint = buildExecutableBlueprint({
+      productName: "InayanBuilder Demo",
+      userGoal: "Build a deterministic AI builder pipeline that outputs executable plans from market signals.",
+      stack: ["node", "typescript", "postgres", "react"],
+      selectedRepos,
+      evidence,
+      constraints: { budgetUsd: 5000, deadlineDays: 14, teamSize: 2 },
+    });
+    blueprint.decisionCitations = decisionCitations;
+    const evaluation = evaluateBlueprint(blueprint);
+    const executionBridge = buildExecutionBridge(blueprint);
+    const planHash = deterministicHash({ demo: true, repos: selectedRepos.map((r) => r.full_name) });
+    return res.json({
+      ok: true,
+      demo: true,
+      productFocus: "deterministic_magic_run",
+      planHash,
+      deterministic: true,
+      timeToFirstWowMs: 200,
+      qualityScore: evaluation.score,
+      blueprint,
+      evaluation,
+      executionBridge,
+      markdownPlan: [
+        "# InayanBuilder Demo - Deterministic Magic Run",
+        "",
+        `Plan Hash: ${planHash}`,
+        `Quality Score: ${evaluation.score}`,
+      ].join("\n"),
+    });
+  });
+
+  app.get("/api/v1/product/focus", requireAuth, (_req, res) => {
+    return res.json({
+      ok: true,
+      primaryExperience: "deterministic_magic_run",
+      hiddenByDefault: [
+        "/api/v1/scout/run",
+        "/api/v1/benchmark/run",
+        "/api/v1/github/research",
+        "/api/v1/reddit/search",
+      ],
+      rationale: "single headline flow for fastest activation and clearer product signal",
+    });
   });
 
   app.get("/api/v1/projects/:projectKey/memory", requireAuth, (req, res) => {
