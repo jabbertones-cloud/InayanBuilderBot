@@ -491,6 +491,14 @@ async function generateModelReply({
   throw new Error(`chat_model_unavailable:${errors.join("|").slice(0, 500)}`);
 }
 
+function normalizeProviderPreference(provider) {
+  const normalized = String(provider || "auto").trim().toLowerCase();
+  if (normalized === "claude") return "anthropic";
+  if (normalized === "google") return "gemini";
+  if (["auto", "openai", "deepseek", "anthropic", "gemini"].includes(normalized)) return normalized;
+  return "auto";
+}
+
 const ScoutSchema = z.object({
   queries: z.array(z.string().min(3)).min(1).max(10),
   perQuery: z.number().int().min(5).max(30).default(15),
@@ -542,7 +550,10 @@ const PipelineSchema = z.object({
 
 const ChatSchema = z.object({
   message: z.string().min(2).max(3000),
-  provider: z.enum(["auto", "openai", "deepseek", "anthropic", "gemini"]).default("auto"),
+  provider: z
+    .enum(["auto", "openai", "deepseek", "anthropic", "claude", "gemini", "google"])
+    .default("auto")
+    .transform((value) => normalizeProviderPreference(value)),
   model: z.string().min(1).max(120).optional(),
   temperature: z.number().min(0).max(2).default(0.3),
   context: z.object({
@@ -563,12 +574,12 @@ export function createApp() {
   const GITHUB_TOKEN = (process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "").trim();
   const OPENAI_API_KEY = (process.env.OPENAI_API_KEY || "").trim();
   const DEEPSEEK_API_KEY = (process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_KEY || "").trim();
-  const ANTHROPIC_API_KEY = (process.env.ANTHROPIC_API_KEY || "").trim();
+  const ANTHROPIC_API_KEY = (process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || "").trim();
   const GEMINI_API_KEY = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY || "").trim();
   const OPENAI_CHAT_MODEL = (process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini").trim();
   const DEEPSEEK_CHAT_MODEL = (process.env.DEEPSEEK_CHAT_MODEL || "deepseek-chat").trim();
-  const ANTHROPIC_CHAT_MODEL = (process.env.ANTHROPIC_CHAT_MODEL || "claude-3-5-sonnet-latest").trim();
-  const GEMINI_CHAT_MODEL = (process.env.GEMINI_CHAT_MODEL || "gemini-1.5-pro").trim();
+  const ANTHROPIC_CHAT_MODEL = (process.env.ANTHROPIC_CHAT_MODEL || process.env.CLAUDE_CHAT_MODEL || "claude-3-5-sonnet-latest").trim();
+  const GEMINI_CHAT_MODEL = (process.env.GEMINI_CHAT_MODEL || process.env.GOOGLE_CHAT_MODEL || "gemini-1.5-pro").trim();
 
   app.disable("x-powered-by");
   app.use(helmet());
