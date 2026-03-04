@@ -1,86 +1,58 @@
-# Installation and Operations
+# Installation
 
-## Prerequisites
+InayanBuilderBot is designed to be simple to install, cheap to run, and reliable in daily use.
+
+## Requirements
 
 - Node.js 20+
 - npm 10+
 
-## Install
+## Fast Local Setup
 
 ```bash
 git clone https://github.com/smanthey/InayanBuilderBot.git
 cd InayanBuilderBot
-npm install
+npm ci
 npm run setup:auto
-```
-
-Set values in `.env`:
-
-- `PORT`
-- `BUILDERBOT_API_KEY`
-- `ALLOWED_ORIGIN`
-- `EXTERNAL_INDEXING_MODE` (`builtin`, `auto`, `openclaw`)
-- at least one model provider key:
-  - `OPENAI_API_KEY`
-  - `DEEPSEEK_API_KEY`
-  - `ANTHROPIC_API_KEY` or `CLAUDE_API_KEY`
-  - `GEMINI_API_KEY` or `GOOGLE_API_KEY`
-- optional built-in Reddit research settings:
-  - `REDDIT_USER_AGENT`
-  - `REDDIT_DEFAULT_SUBREDDITS`
-  - `REDDIT_REQUEST_TIMEOUT_MS`
-
-## Run
-
-Development:
-
-```bash
 npm run dev:auto
 ```
 
-Production:
+## Required Environment Variables
+
+- `BUILDERBOT_API_KEY`
+- `ALLOWED_ORIGIN`
+- `EXTERNAL_INDEXING_MODE` (`builtin`, `auto`, `openclaw`)
+
+## Optional Provider Keys
+
+- `OPENAI_API_KEY`
+- `DEEPSEEK_API_KEY`
+- `ANTHROPIC_API_KEY` or `CLAUDE_API_KEY`
+- `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+
+## Optional Reddit Research Settings
+
+- `REDDIT_USER_AGENT`
+- `REDDIT_DEFAULT_SUBREDDITS`
+- `REDDIT_REQUEST_TIMEOUT_MS`
+
+## Production Run
 
 ```bash
 npm run start
 ```
 
-Docker one-click:
+## Docker Run
 
 ```bash
 docker compose up -d --build
 ```
 
-For self-contained advanced indexing integration (no external toolchain), set:
-
-```bash
-EXTERNAL_INDEXING_MODE=builtin
-```
-
-For OpenClaw/MCP-style git indexing parity, keep:
-
-```bash
-EXTERNAL_INDEXING_MODE=auto
-CLAW_ARCHITECT_ROOT=/path/to/claw-architect
-```
-
-Then use `/api/v1/indexing/*` endpoints for sync/readiness/scout operations.
-
-## Health Check
-
-```bash
-curl http://localhost:3000/health
-```
-
-## Security Gate Before Push
+## Verification Checklist
 
 ```bash
 npm run lint
 npm run security:check
-npm run test
+npm run mcp:health
+npm test
 ```
-
-## Deploy Notes
-
-- Put service behind reverse proxy/TLS in production.
-- Keep `BUILDERBOT_API_KEY` in secret manager or host env, never in git.
-- Set restrictive `ALLOWED_ORIGIN`.

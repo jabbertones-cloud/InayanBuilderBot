@@ -1,8 +1,16 @@
 # Contributing to InayanBuilderBot
 
-Thanks for contributing.
+InayanBuilderBot is an open-source **AI builder agent** focused on one core outcome: deterministic, execution-ready build plans.
 
-## Fast Start
+## Contribution Priorities
+
+We prioritize contributions that improve:
+- deterministic Magic Run output quality
+- execution bridge completeness (owner, estimate, dependencies, acceptance criteria)
+- GitHub + Reddit research signal quality
+- reliability, security, and reproducibility
+
+## Quick Start
 
 ```bash
 npm ci
@@ -15,8 +23,8 @@ npm run security:check
 ## Development Workflow
 
 1. Create a branch from `main`.
-2. Make focused changes (one concern per PR when possible).
-3. Add or update tests for behavior changes.
+2. Keep each PR focused on one behavior change.
+3. Add or update tests for the changed behavior.
 4. Run validation locally:
 
 ```bash
@@ -25,32 +33,24 @@ npm run test
 npm run security:check
 ```
 
-5. Open a PR using the template.
-
-## What We Prioritize
-
-- Reliability over cleverness
-- Clear API contracts
-- Strong security defaults
-- Good docs and copy-paste examples
+5. Open a PR with clear before/after behavior.
 
 ## PR Quality Bar
 
-- No secrets committed
-- No broken tests
-- Inputs validated
-- Failure paths handled and tested
+- no secrets in commits
+- deterministic output behavior preserved or intentionally changed
+- request validation added for new API inputs
+- failure modes handled explicitly
+- docs updated for any endpoint/schema behavior changes
 
-## Commit Style
+## Commit Prefixes
 
-Use clear prefixes where possible:
 - `feat:` new behavior
 - `fix:` bug fix
-- `docs:` documentation only
+- `docs:` documentation or copy changes
 - `chore:` maintenance
-- `test:` test changes
+- `test:` test-only changes
 
 ## Security Reports
 
-If you find a security issue, do not open a public exploit issue first.
-Open an issue with minimal reproduction and label it `security`.
+If you discover a security issue, open a minimal private report first and avoid posting exploit detail in public issues.

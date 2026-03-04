@@ -11,6 +11,10 @@ Use these terms consistently across docs and release notes:
 - GitHub + Reddit research pipeline
 - implementation task generation
 - plan hash and quality score
+- simple to install
+- cheap to run
+- amazing to use
+- built to work
 
 ## Documentation Rules
 
@@ -56,4 +60,3 @@ Before merging docs updates:
 - [ ] major outputs are named exactly as API returns
 - [ ] new features are reflected in `docs/UPDATE_NOTES.md`
 - [ ] wording is concise and keyword-rich, not spammy
-

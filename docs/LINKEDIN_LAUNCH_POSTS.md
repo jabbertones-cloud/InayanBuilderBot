@@ -1,52 +1,47 @@
-# LinkedIn Launch Posts
+# Launch Post Drafts
 
-Use these as ready-to-post launch options for InayanBuilderBot.
+These drafts are optimized for product clarity and AI-builder search terms.
 
-GitHub link: https://github.com/smanthey/InayanBuilderBot
+Repo: https://github.com/smanthey/InayanBuilderBot
 
-## Post 1 (Founder Build Log Style)
+## Post 1: Product Positioning
 
-I just shipped InayanBuilderBot, a production-ready builder agent that combines:
-- GitHub repo research
-- GitHub issue/forum answer mining with code snippet extraction
-- Reddit research with fallback sourcing and ranking
-- Multi-provider AI chat routing (OpenAI, DeepSeek, Anthropic, Gemini)
+Shipped: InayanBuilderBot
 
-This is not a concept demo. It runs as a real service with API endpoints, tests, CI, Docker, and security checks.
+An open-source AI builder agent that outputs deterministic, execution-ready plans.
 
-If you want to build your own agent stack faster, clone it and fork the workflows:
+Core value:
+- one-click Magic Run
+- proof metrics: `timeToFirstWowMs`, `planHash`, `qualityScore`
+- GitHub + Reddit research-backed decisions
+- recompile diff flow for fast iteration under constraints
+
+If you are building agent products and want implementation-ready outputs instead of prompt-only plans, this is for you.
+
 https://github.com/smanthey/InayanBuilderBot
 
-If you are building in public, drop your repo below and I will share one practical improvement I would make first.
+## Post 2: Technical Positioning
 
-## Post 2 (Direct Technical Style)
+Most planning tools stop at text.
 
-Most builder agents stop at "find repos by stars."
+InayanBuilderBot ships a deterministic planning API with:
+- strict schema validation for blueprint + execution tasks
+- evidence-backed repo benchmarking and research fusion
+- owner-ready execution tasks with acceptance criteria
+- built-in recompile diffs when constraints change
 
-InayanBuilderBot goes further:
-- ranks dashboard/chat OSS repos
-- pulls implementation answers from GitHub issues
-- extracts code snippets from answer threads
-- adds Reddit signal research for real-world build patterns
-- feeds all of that into the build pipeline and model-backed chat
+API + dashboard + tests + CI + Docker are included.
 
-Repo:
 https://github.com/smanthey/InayanBuilderBot
 
-If you are a Claude Code user, you can use this as your base and spin up your own GitHub agent in one repo.
+## Post 3: Builder-to-Builder
 
-## Post 3 (Operator + Dev Audience)
+Open-sourced a deterministic AI planning stack:
 
-Built and open-sourced: InayanBuilderBot
+- `POST /api/v1/masterpiece/magic-run`
+- `POST /api/v1/masterpiece/recompile`
+- `GET /api/v1/masterpiece/magic-run/demo`
 
-What I cared about:
-- runs from a clean GitHub clone
-- clear install + env path
-- CI that catches breakage
-- security checks before push
-- practical research stack (GitHub + Reddit) instead of vibes-only planning
+If you are shipping agent products and want reproducible outputs and stronger implementation handoff, fork it.
 
-GitHub:
 https://github.com/smanthey/InayanBuilderBot
-
-Happy to share the exact Claude Code bootstrap prompt if you want to fork this into your own branded agent.

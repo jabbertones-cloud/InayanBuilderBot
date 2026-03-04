@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a reproducible bug
+about: Report a reproducible bug in Magic Run, recompile, research, or chat flows
 title: "[Bug] "
 labels: bug
 assignees: ''
@@ -8,24 +8,28 @@ assignees: ''
 
 ## Summary
 
-What broke?
+What broke, and which endpoint or UI flow is affected?
 
-## Steps to reproduce
+## Steps to Reproduce
 
 1.
 2.
 3.
 
-## Expected behavior
+## Expected Behavior
 
-## Actual behavior
+## Actual Behavior
+
+## Impact
+
+How does this affect deterministic output quality, proof metrics, or execution readiness?
 
 ## Environment
 
 - OS:
 - Node version:
-- Command used:
+- command/API call used:
 
-## Logs / screenshots
+## Logs or Screenshots
 
-Paste relevant logs (redact secrets).
+Paste only relevant output. Redact secrets and tokens.

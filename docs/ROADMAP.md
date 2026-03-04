@@ -1,29 +1,33 @@
-# Public Roadmap
+# Product Roadmap
 
-## v1.1 (Near-term)
+## Product North Star
 
-- Better frontend UX parity with creator workflow videos
-- Streaming chat UX polish and typing indicators
-- Exportable build plans and run artifacts
-- Provider routing observability dashboard
+Make InayanBuilderBot the most trusted open-source **deterministic AI builder agent** for implementation-ready planning.
 
-## v1.2 (Mid-term)
+## v1.1 (Near-Term)
 
-- Plugin system for external research connectors
-- Richer GitHub signal scoring (code ownership, release health)
-- Reddit quality calibration and anti-noise filters
-- One-command NAS deployment profile
+- OpenAPI spec for all v1 endpoints
+- richer magic-run validation and self-repair criteria
+- improved recompile diff ergonomics
+- export formats for Jira, Linear, and GitHub Issues
+
+## v1.2 (Mid-Term)
+
+- modular service split from `src/index.js`
+- Postgres-backed persistence option
+- stronger evidence credibility scoring and citation UX
+- provider circuit-breaker and timeout policy visibility
 
 ## v1.3 (Growth)
 
-- Marketplace of reusable build recipes
-- Team workspaces and shared sessions
-- Signed release artifacts and SBOM
-- Public benchmark leaderboard for agent stacks
+- weekly benchmark report artifacts
+- reproducible benchmark manifests with version stamps
+- plugin hooks for external signal sources
+- public benchmark leaderboard and contribution flows
 
-## Community Priorities
+## Community Labels
 
-We actively prioritize issues labeled:
+We actively prioritize:
 - `good first issue`
 - `help wanted`
 - `security`

@@ -1,26 +1,25 @@
 # Code of Conduct
 
-## Our Pledge
+## Our Commitment
 
-We want this project to be welcoming, practical, and respectful for everyone.
+We maintain a respectful, practical, and inclusive collaboration environment for contributors building an open-source AI builder agent.
 
-## Our Standards
+## Expected Behavior
 
-Examples of behavior that contributes to a positive environment:
-- Respectful, constructive feedback
-- Assume good intent and ask clarifying questions
-- Focus on code, behavior, and outcomes, not personal attacks
+- provide respectful, actionable technical feedback
+- challenge ideas, not people
+- prioritize clarity, evidence, and reproducibility
 
-Examples of unacceptable behavior:
-- Harassment, insults, or discrimination
-- Doxxing or exposing private information
-- Deliberate disruption or bad-faith trolling
+## Unacceptable Behavior
+
+- harassment, discrimination, or intimidation
+- doxxing or sharing private information
+- repeated bad-faith disruption
 
 ## Enforcement
 
-Project maintainers may remove comments, issues, or contributions that violate this Code of Conduct.
-Serious or repeated violations may result in a ban from project spaces.
+Maintainers may remove content or restrict participation for behavior that violates this code.
 
 ## Scope
 
-This applies across repository issues, pull requests, and discussions tied to the project.
+Applies to issues, pull requests, discussions, and linked community spaces.
