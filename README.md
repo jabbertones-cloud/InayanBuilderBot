@@ -57,6 +57,7 @@ Execution output now includes Playwright-focused E2E planning artifacts by defau
 Related endpoints:
 - `POST /api/v1/masterpiece/recompile`
 - `GET /api/v1/masterpiece/magic-run/demo`
+- `POST /api/v1/masterpiece/finish/run`
 - `GET /api/v1/projects/:projectKey/memory`
 - `GET /api/v1/product/focus`
 
@@ -69,6 +70,7 @@ Real-system execution mode (`/api/v1/masterpiece/pipeline/run` with `runExternal
 
 ### Masterpiece + Pipeline
 - `POST /api/v1/masterpiece/magic-run`
+- `POST /api/v1/masterpiece/finish/run`
 - `POST /api/v1/masterpiece/recompile`
 - `GET /api/v1/masterpiece/magic-run/demo`
 - `POST /api/v1/masterpiece/pipeline/run`
@@ -101,6 +103,7 @@ Real-system execution mode (`/api/v1/masterpiece/pipeline/run` with `runExternal
 - `POST /api/v1/index/refresh`
 - `GET /api/v1/index/search?q=...`
 - `GET /api/v1/index/stats`
+- `GET /api/v1/index/gap-hotspots`
 - `GET /api/v1/setup/status`
 - `POST /api/v1/setup/onboard`
 - `GET /api/v1/runs`
@@ -157,6 +160,60 @@ Expected response highlights:
 - `timeToFirstWowMs: <number>`
 - `executionBridge.tasks[]` with owner, estimate, dependencies, acceptance criteria
 
+## Example: Finishing Process Run
+
+Use this to generate the production finishing system (quality architecture + human-like E2E + UX loop + release gate + repo coverage) with benchmarked OSS exemplars:
+
+```bash
+curl -X POST http://localhost:3030/api/v1/masterpiece/finish/run \
+  -H 'Content-Type: application/json' \
+  -H 'x-api-key: local-dev-key' \
+  -d '{
+    "productName": "InayanBuilder",
+    "userGoal": "Finish all sellable repos with production-grade quality and human-like E2E",
+    "stack": ["node", "typescript", "postgres", "react", "playwright"],
+    "focusRepos": [
+      "autopay_ui",
+      "capture",
+      "CaptureInbound",
+      "FoodTruckPass",
+      "veritap_2026",
+      "quantfusion",
+      "InayanBuilderBot",
+      "pingmyself",
+      "Madirectory"
+    ],
+    "timeoutTier": "standard",
+    "benchmarkTopK": 12,
+    "minStars": 500
+  }'
+```
+
+Expected output highlights:
+- `qualityArchitecture`
+- `humanLikeE2EStandard`
+- `uxUiImprovementLoop`
+- `gapHotspots` (learned from latest rolling completion-gap report)
+- `repoCriticalFlowCoverage`
+- `releaseGate`
+- `bestOpenSourceExemplars`
+- `executionBridge.tasks`
+- `planHash`, `timeToFirstWowMs`
+
+## Example: Gap Hotspot Profile
+
+Use this to inspect what the builder currently treats as the highest-frequency break patterns from real repo completion runs:
+
+```bash
+curl -X GET http://localhost:3030/api/v1/index/gap-hotspots \
+  -H 'x-api-key: local-dev-key'
+```
+
+Expected output highlights:
+- `hotspots.topSections[]` (e.g. `queue_retry`, `observability`, `auth`)
+- `hotspots.topIssues[]` (e.g. `FORBIDDEN_PATTERN`, `MULTITENANT_BASELINE_MISSING`)
+- `hotspots.reportPath` and `hotspots.totalRepos`
+
 ## Example: Real Repo Completion Run
 
 Use this to validate and improve actual repos (not just plan generation):
@@ -210,6 +267,7 @@ Research is native to the product:
 - citation attachment for major planning decisions
 
 See: [`docs/RESEARCH_AND_BENCHMARKS.md`](./docs/RESEARCH_AND_BENCHMARKS.md)
+See also: [`docs/FINISHING-PROCESS.md`](./docs/FINISHING-PROCESS.md)
 
 ## Gap Intelligence Updates (OpenClaw Integration)
 
