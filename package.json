@@ -41,7 +41,8 @@
     "public:safety:check": "node scripts/public-safety-check.mjs",
     "mcp:health": "node scripts/mcp-health-check.js",
     "claw:baseline:gate": "node scripts/claw-baseline-gate.js",
-    "claw:security:gate": "node scripts/claw-security-gate.js"
+    "claw:security:gate": "node scripts/claw-security-gate.js",
+    "check": "npm run -s lint"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",

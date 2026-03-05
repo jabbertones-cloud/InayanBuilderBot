@@ -5252,6 +5252,119 @@ export function createApp() {
     return res.sendFile(fp);
   });
 
+  // ── Content: from-brief → build video + optional Shorts publish ─────────────
+  // POST /api/v1/content/from-brief
+  // Body: { brief: string, topic?: string, scenes?: number, publish_shorts?: boolean }
+  // Runs content-creator-video-build.js from the claw-architect repo, then optionally
+  // runs youtube-shorts-publisher.js. Returns run status + manifest path.
+  const FromBriefSchema = z.object({
+    brief: z.string().min(10).max(4000),
+    topic: z.string().max(200).optional(),
+    scenes: z.number().int().min(2).max(12).optional(),
+    publish_shorts: z.boolean().optional().default(false),
+  });
+
+  app.post("/api/v1/content/from-brief", requireAuth, async (req, res) => {
+    const parsed = FromBriefSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+    }
+
+    const { brief, topic, scenes, publish_shorts } = parsed.data;
+    const clawRoot = process.env.CLAW_ARCHITECT_ROOT || path.join(__dirname, "..", "..", "..", "claw-architect");
+    const buildScript = path.join(clawRoot, "scripts", "content-creator-video-build.js");
+    const publishScript = path.join(clawRoot, "scripts", "youtube-shorts-publisher.js");
+
+    if (!fs.existsSync(buildScript)) {
+      return res.status(503).json({
+        ok: false,
+        error: "build_script_unavailable",
+        detail: `content-creator-video-build.js not found at ${buildScript}. Set CLAW_ARCHITECT_ROOT env var.`,
+      });
+    }
+
+    const runId = `from_brief_${Date.now()}`;
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 23);
+    const outDir = path.join(clawRoot, "outputs", "content-videos", stamp);
+
+    // Build args — pass brief via env, scenes via CLI
+    const buildArgs = ["--out-dir", outDir];
+    if (scenes) buildArgs.push("--scenes", String(scenes));
+
+    const buildEnv = {
+      ...process.env,
+      CONTENT_BRIEF: brief,
+      ...(topic ? { CONTENT_TOPIC: topic } : {}),
+    };
+
+    const runEntry = {
+      id: runId,
+      type: "content_from_brief",
+      createdAt: new Date().toISOString(),
+      payload: { brief: brief.slice(0, 200), topic, scenes, publish_shorts },
+      status: "running",
+      outDir,
+    };
+    appState.runs.unshift(runEntry);
+    trimHistory();
+    persistDataStore();
+
+    // Run build synchronously (video build takes 10-120s — use spawn with timeout)
+    const buildResult = spawnSync("node", [buildScript, ...buildArgs], {
+      env: buildEnv,
+      cwd: clawRoot,
+      timeout: 180_000,
+      encoding: "utf8",
+    });
+
+    if (buildResult.status !== 0 || buildResult.error) {
+      runEntry.status = "failed";
+      runEntry.error = buildResult.error?.message || buildResult.stderr?.slice(-500) || "build failed";
+      persistDataStore();
+      return res.status(500).json({ ok: false, error: "build_failed", detail: runEntry.error, runId });
+    }
+
+    // Read manifest written by build script
+    let manifest = null;
+    try {
+      const manifestPath = path.join(outDir, "manifest.json");
+      if (fs.existsSync(manifestPath)) {
+        manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+      }
+    } catch {
+      // non-fatal — manifest may not exist on error
+    }
+
+    // Optional: upload to YouTube Shorts
+    let shortsResult = null;
+    if (publish_shorts && fs.existsSync(publishScript)) {
+      const shortsProc = spawnSync("node", [publishScript, "--limit", "1"], {
+        env: { ...buildEnv, CONTENT_VIDEOS_DIR: path.join(clawRoot, "outputs", "content-videos") },
+        cwd: clawRoot,
+        timeout: 120_000,
+        encoding: "utf8",
+      });
+      shortsResult = {
+        exit_code: shortsProc.status,
+        stdout: (shortsProc.stdout || "").slice(-500),
+        stderr: (shortsProc.stderr || "").slice(-200),
+      };
+    }
+
+    runEntry.status = "completed";
+    runEntry.manifest = manifest;
+    runEntry.shorts = shortsResult;
+    persistDataStore();
+
+    return res.json({
+      ok: true,
+      runId,
+      outDir,
+      manifest,
+      shorts: shortsResult,
+    });
+  });
+
   app.use((err, _req, res, _next) => {
     console.error("Unhandled error:", err?.message || err);
     return res.status(500).json({ ok: false, error: "internal_error" });
