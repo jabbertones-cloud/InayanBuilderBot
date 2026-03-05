@@ -39,6 +39,51 @@ const PIPELINE_GITHUB_CACHE = new Map();
 const PIPELINE_REDDIT_CACHE = new Map();
 const MAGIC_RUN_CACHE_TTL_MS = Number(process.env.MAGIC_RUN_CACHE_TTL_MS || 10 * 60 * 1000);
 const MAGIC_RUN_MAX_BUDGET_USD = Number(process.env.MAGIC_RUN_MAX_BUDGET_USD || 25000);
+const GAP_HOTSPOT_TTL_MS = Number(process.env.GAP_HOTSPOT_TTL_MS || 5 * 60 * 1000);
+const DEFAULT_GAP_HOTSPOTS = {
+  generatedAt: new Date().toISOString(),
+  source: "builtin_default",
+  totalRepos: 0,
+  sections: {
+    queue_retry: 25,
+    observability: 22,
+    auth: 21,
+    email_setup: 20,
+    telnyx_sms: 20,
+    e2e: 20,
+    security_sweep: 20,
+    capability_factory_health: 20,
+    admin_setup: 17,
+    stripe_checkout: 15,
+    stripe_webhooks: 10,
+    webhooks_signature_verify: 9,
+    feature_benchmark_vs_exemplar: 3,
+  },
+  issues: {
+    FORBIDDEN_PATTERN: 45,
+    MULTITENANT_BASELINE_MISSING: 17,
+    AUTH_NOT_STANDARDIZED: 3,
+  },
+};
+const GAP_HOTSPOT_SECTION_KEYWORDS = {
+  queue_retry: ["queue", "bullmq", "worker", "retry", "backoff", "job"],
+  observability: ["observability", "metrics", "health", "winston", "telemetry", "trace", "logging"],
+  auth: ["auth", "better-auth", "session", "oauth", "signin", "login"],
+  email_setup: ["email", "smtp", "mailersend", "brevo", "resend", "maileroo"],
+  telnyx_sms: ["telnyx", "sms", "messaging", "twilio", "inbound", "webhook"],
+  e2e: ["e2e", "playwright", "cypress", "spec", "test"],
+  security_sweep: ["helmet", "rate-limit", "csrf", "signature", "security", "audit"],
+  capability_factory_health: ["capability", "baseline", "health", "hardening", "validation"],
+  admin_setup: ["tenant", "organization", "workspace", "multitenant", "admin"],
+  stripe_checkout: ["stripe", "checkout", "payment", "session"],
+  stripe_webhooks: ["stripe", "webhook", "signature", "idempotency"],
+  webhooks_signature_verify: ["webhook", "signature", "hmac", "verify"],
+  feature_benchmark_vs_exemplar: ["benchmark", "exemplar", "leaderboard", "score"],
+};
+const gapHotspotCache = {
+  loadedAt: 0,
+  data: DEFAULT_GAP_HOTSPOTS,
+};
 
 function ensureDataStore() {
   fs.mkdirSync(dataDir, { recursive: true });
@@ -650,6 +695,185 @@ function buildExecutionBridge(blueprint) {
   };
 }
 
+const FINISHING_DEFAULT_REPO_FLOWS = {
+  autopay_ui: [
+    "signup/login",
+    "create payment request",
+    "Stripe checkout",
+    "webhook crediting",
+    "support ticket",
+    "admin auth",
+  ],
+  capture: [
+    "upload proof generation",
+    "verification flow",
+    "sharing/export",
+    "billing",
+  ],
+  captureinbound: [
+    "intake flow",
+    "attribution path",
+    "lead state transitions",
+    "notifications",
+  ],
+  foodtruckpass: [
+    "onboarding",
+    "menu/order/payment",
+    "merchant dashboard",
+  ],
+  veritap_2026: [
+    "verification journey",
+    "evidence traceability",
+    "report export",
+  ],
+  quantfusion: [
+    "signal generation",
+    "strategy run",
+    "risk controls",
+    "report output",
+  ],
+  inayanbuilderbot: [
+    "magic run",
+    "recompile diff",
+    "contract gap check",
+    "streaming chat",
+  ],
+  pingmyself: [
+    "core user loop",
+    "notifications",
+    "account/settings",
+    "edge failures",
+  ],
+  madirectory: [
+    "listing flow",
+    "search/filter",
+    "contact/lead handoff",
+    "admin moderation",
+  ],
+};
+
+const FINISHING_QUALITY_ARCHITECTURE = [
+  "API contract tests: validate every endpoint request/response schema.",
+  "Core integration tests: DB + queue + webhook + billing paths.",
+  "Deterministic E2E: stable golden flows with fixed seed data.",
+  "Human-like E2E: keyboard/mouse paths, realistic waits, session persistence.",
+  "Visual regression: screenshot diffs for high-traffic pages/components.",
+  "UX audits: accessibility, performance budgets, funnel friction checks.",
+  "Synthetic monitoring: run top buyer journeys every 5–15 minutes.",
+];
+
+const FINISHING_HUMAN_E2E_STANDARD = [
+  "Use role/label selectors over brittle CSS selectors.",
+  "Gate each step on networkidle + visible + enabled readiness.",
+  "Use click/type/tab/enter/scroll interaction mix for realism.",
+  "Persist auth via storageState for post-login flows.",
+  "Capture video/trace/screenshot/console/network artifacts on failure.",
+  "Retry only known transient failures.",
+  "Run desktop and mobile viewport profiles.",
+];
+
+const FINISHING_UX_LOOP = [
+  "Track timeToFirstAction and timeToValue for each funnel.",
+  "Emit step_started, step_failed, step_completed events per journey step.",
+  "Run axe accessibility scans in CI for key pages.",
+  "Run Lighthouse budgets (LCP, INP, CLS) in CI.",
+  "Run visual snapshots on every PR for core pages.",
+  "Run copy/CTA experiments with measurable conversion deltas.",
+  "Add guided empty states and inline validation where users hesitate.",
+];
+
+const FINISHING_RELEASE_GATE = [
+  "API contracts pass.",
+  "Golden deterministic E2E pass.",
+  "Human-like E2E pass.",
+  "Visual diffs approved.",
+  "A11y violations under threshold.",
+  "Performance budgets pass.",
+  "Security/audit checks pass.",
+  "No blocker UX friction in telemetry.",
+];
+
+const FINISHING_IMMEDIATE_ORDER = [
+  "Build shared Playwright human-flow harness in InayanBuilderBot.",
+  "Apply harness to autopay_ui.",
+  "Replicate harness to capture and CaptureInbound.",
+  "Add CI quality gate + artifact publishing for all focus repos.",
+];
+
+function normalizeRepoKey(value) {
+  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function buildRepoCoverage(focusRepos = []) {
+  const rows = [];
+  for (const repo of Array.isArray(focusRepos) ? focusRepos : []) {
+    const key = normalizeRepoKey(repo);
+    const flows = FINISHING_DEFAULT_REPO_FLOWS[key] || [
+      "onboarding",
+      "core workflow",
+      "billing",
+      "admin",
+      "export/reporting",
+    ];
+    rows.push({
+      repo,
+      criticalFlows: flows,
+      flowCount: flows.length,
+    });
+  }
+  return rows;
+}
+
+function buildFinishingExecutionBridge({ focusRepos = [], coverage = [], qualityScore = 0 }) {
+  const tasks = [];
+  let priority = 1;
+  for (const row of coverage) {
+    tasks.push({
+      priority,
+      owner: "qa",
+      title: `Contract + integration suite for ${row.repo}`,
+      estimateHours: 5,
+      dependencies: [],
+      acceptance_criteria: [
+        "Endpoint request/response schemas are validated in CI.",
+        "DB + queue + webhook + billing integration tests pass.",
+      ],
+    });
+    tasks.push({
+      priority: Math.min(5, priority + 1),
+      owner: "qa",
+      title: `Deterministic + human-like E2E for ${row.repo}`,
+      estimateHours: 6,
+      dependencies: [`Contract + integration suite for ${row.repo}`],
+      acceptance_criteria: [
+        `Covers flows: ${row.criticalFlows.join(", ")}.`,
+        "Desktop/mobile suites pass with artifact capture on failure.",
+      ],
+    });
+    tasks.push({
+      priority: Math.min(5, priority + 2),
+      owner: "frontend",
+      title: `UX quality loop instrumentation for ${row.repo}`,
+      estimateHours: 4,
+      dependencies: [`Deterministic + human-like E2E for ${row.repo}`],
+      acceptance_criteria: [
+        "Friction telemetry events are emitted for funnel steps.",
+        "A11y + Lighthouse budgets enforced in CI.",
+      ],
+    });
+    priority = Math.min(5, priority + 1);
+  }
+  return {
+    qualityScore,
+    tasks,
+    acceptance_summary: {
+      total_tasks: tasks.length,
+      repos_covered: focusRepos.length,
+      release_gate_checks: FINISHING_RELEASE_GATE.length,
+    },
+  };
+}
+
 function getCache(cache, key) {
   const hit = cache.get(key);
   if (!hit) return null;
@@ -1175,6 +1399,103 @@ function analyzeRepoContractGap({ repoPath, maxFiles = 5000, maxFileBytes = 1024
   };
 }
 
+function resolveGapHotspotReportPath() {
+  const candidates = [
+    process.env.GAP_HOTSPOT_REPORT_PATH,
+    path.join(CLAW_ARCHITECT_ROOT, "reports", "repo-completion-gap-rolling.json"),
+    "/Users/tatsheen/.codex/worktrees/243e/claw-architect/reports/repo-completion-gap-rolling.json",
+  ].filter(Boolean);
+  return candidates.find((p) => fs.existsSync(String(p))) || null;
+}
+
+function buildGapHotspotsFromRollingReport(records) {
+  const latestByRepo = {};
+  for (const record of records || []) {
+    if (record?.repo) latestByRepo[record.repo] = record;
+  }
+  const latest = Object.values(latestByRepo);
+  const sections = {};
+  const issues = {};
+  for (const repo of latest) {
+    for (const [sectionId, section] of Object.entries(repo.sections || {})) {
+      if (String(section?.status || "").toLowerCase() !== "complete") {
+        sections[sectionId] = Number(sections[sectionId] || 0) + 1;
+      }
+    }
+    for (const issue of repo.issues || []) {
+      const code = String(issue?.code || "").trim();
+      if (!code) continue;
+      issues[code] = Number(issues[code] || 0) + 1;
+    }
+  }
+  return {
+    generatedAt: new Date().toISOString(),
+    source: "rolling_report",
+    reportPath: resolveGapHotspotReportPath(),
+    totalRepos: latest.length,
+    sections,
+    issues,
+  };
+}
+
+function loadGapHotspots() {
+  const now = Date.now();
+  if (gapHotspotCache.data && now - gapHotspotCache.loadedAt < GAP_HOTSPOT_TTL_MS) {
+    return gapHotspotCache.data;
+  }
+  const reportPath = resolveGapHotspotReportPath();
+  if (!reportPath) {
+    gapHotspotCache.loadedAt = now;
+    gapHotspotCache.data = {
+      ...DEFAULT_GAP_HOTSPOTS,
+      generatedAt: new Date().toISOString(),
+    };
+    return gapHotspotCache.data;
+  }
+  try {
+    const raw = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+    const data = buildGapHotspotsFromRollingReport(Array.isArray(raw) ? raw : []);
+    gapHotspotCache.loadedAt = now;
+    gapHotspotCache.data = data;
+    return data;
+  } catch {
+    gapHotspotCache.loadedAt = now;
+    gapHotspotCache.data = {
+      ...DEFAULT_GAP_HOTSPOTS,
+      generatedAt: new Date().toISOString(),
+      source: "builtin_default_parse_fallback",
+      reportPath,
+    };
+    return gapHotspotCache.data;
+  }
+}
+
+function computeGapHotspotEvidence(repo) {
+  const hotspots = loadGapHotspots();
+  const sectionCounts = hotspots?.sections && Object.keys(hotspots.sections).length
+    ? hotspots.sections
+    : DEFAULT_GAP_HOTSPOTS.sections;
+  const maxCount = Math.max(...Object.values(sectionCounts).map((x) => Number(x || 0)), 1);
+  const text = `${repo.name || ""} ${repo.description || ""} ${(repo.topics || []).join(" ")} ${(repo.uiHits || []).join(" ")} ${(repo.breakPatternHits || []).join(" ")}`.toLowerCase();
+
+  let evidence = 0;
+  const hits = [];
+  for (const [sectionId, countRaw] of Object.entries(sectionCounts)) {
+    const keywords = GAP_HOTSPOT_SECTION_KEYWORDS[sectionId] || [];
+    if (!keywords.length) continue;
+    const matched = keywords.some((k) => text.includes(String(k).toLowerCase()));
+    if (!matched) continue;
+    const count = Number(countRaw || 0);
+    const weight = 0.5 + (count / maxCount) * 1.75;
+    evidence += weight;
+    hits.push(`${sectionId}:${count}`);
+  }
+  return {
+    evidence: roundNumber(evidence, 2),
+    hits: hits.sort((a, b) => String(a).localeCompare(String(b))).slice(0, 16),
+  };
+}
+
 function scoreRepo(repo) {
   const stars = Number(repo.stargazers_count || repo.stars || 0);
   const forks = Number(repo.forks_count || repo.forks || 0);
@@ -1183,6 +1504,11 @@ function scoreRepo(repo) {
   const recencyScore = Math.max(0, 25 - Math.min(25, recencyDays / 10));
   const ui = computeUiEvidence(repo);
   const breakPatterns = computeBreakPatternEvidence(repo);
+  const hotspotSignals = computeGapHotspotEvidence({
+    ...repo,
+    uiHits: ui.hits,
+    breakPatternHits: breakPatterns.hits,
+  });
 
   const text = `${repo.name || ""} ${repo.description || ""} ${(repo.topics || []).join(" ")}`.toLowerCase();
   const frameworkOnly = /(sdk|framework|runtime|toolkit|library|engine|starter|template)/i.test(text)
@@ -1195,7 +1521,8 @@ function scoreRepo(repo) {
     recencyScore +
     ui.evidence * 4 -
     (frameworkOnly ? 22 : 0) +
-    breakPatterns.evidence * 2.2;
+    breakPatterns.evidence * 2.2 +
+    hotspotSignals.evidence * 2.4;
 
   return {
     score: Math.round(score * 100) / 100,
@@ -1203,6 +1530,8 @@ function scoreRepo(repo) {
     uiHits: ui.hits,
     breakPatternEvidence: breakPatterns.evidence,
     breakPatternHits: breakPatterns.hits,
+    hotspotEvidence: hotspotSignals.evidence,
+    hotspotHits: hotspotSignals.hits,
     frameworkOnly,
   };
 }
@@ -1210,16 +1539,21 @@ function scoreRepo(repo) {
 function benchmarkRepos(repos, weightUi = 0.58, weightPopularity = 0.42) {
   const maxStars = Math.max(...repos.map((r) => Number(r.stars || r.stargazers_count || 0)), 1);
   const maxBreakPatternEvidence = Math.max(...repos.map((r) => Number(r.breakPatternEvidence || 0)), 1);
+  const maxHotspotEvidence = Math.max(...repos.map((r) => Number(r.hotspotEvidence || 0)), 1);
   return repos
     .map((r) => {
       const uiNorm = Math.min(1, Number(r.uiEvidence || 0) / 14);
       const popNorm = Number(r.stars || r.stargazers_count || 0) / maxStars;
       const breakPatternNorm = Number(r.breakPatternEvidence || 0) / maxBreakPatternEvidence;
-      const breakPatternWeight = 0.16;
+      const hotspotNorm = Number(r.hotspotEvidence || 0) / maxHotspotEvidence;
+      const breakPatternWeight = 0.14;
+      const hotspotWeight = 0.2;
+      const baseWeightScale = 1 - breakPatternWeight - hotspotWeight;
       const benchmarkScore = Math.round(
-        (uiNorm * (weightUi * (1 - breakPatternWeight))
-          + popNorm * (weightPopularity * (1 - breakPatternWeight))
-          + breakPatternNorm * breakPatternWeight) * 10000
+        (uiNorm * (weightUi * baseWeightScale)
+          + popNorm * (weightPopularity * baseWeightScale)
+          + breakPatternNorm * breakPatternWeight
+          + hotspotNorm * hotspotWeight) * 10000
       ) / 100;
       return { ...r, benchmarkScore };
     })
@@ -1272,6 +1606,7 @@ function runBuiltinAdvancedIndexing({ repos, queries, minStars, topK }) {
       full_name: r.full_name,
       benchmarkScore: r.benchmarkScore,
       uiEvidence: r.uiEvidence,
+      hotspotEvidence: Number(r.hotspotEvidence || 0),
       stars: r.stars || r.stargazers_count || 0,
     })),
   };
@@ -2466,6 +2801,26 @@ const MagicRunSchema = z.object({
   deterministic: z.boolean().default(true),
 });
 
+const FinishingRunSchema = z.object({
+  productName: z.string().min(2).max(120).default("InayanBuilder"),
+  userGoal: z.string().min(10).max(4000),
+  stack: z.array(z.string().min(1).max(80)).min(1).max(30).default(["node", "typescript", "postgres", "react", "playwright"]),
+  focusRepos: z.array(z.string().min(2).max(120)).min(1).max(30).default([
+    "autopay_ui",
+    "capture",
+    "CaptureInbound",
+    "FoodTruckPass",
+    "veritap_2026",
+    "quantfusion",
+    "InayanBuilderBot",
+    "pingmyself",
+    "Madirectory",
+  ]),
+  timeoutTier: z.enum(["fast", "standard", "deep"]).default("standard"),
+  benchmarkTopK: z.number().int().min(6).max(30).default(12),
+  minStars: z.number().int().min(100).max(500000).default(500),
+});
+
 const RecompileSchema = z.object({
   runId: z.string().min(4).max(120),
   constraints: z.object({
@@ -2990,6 +3345,29 @@ export function createApp() {
       return res.status(503).json({ ok: false, error: "index_store_unavailable", detail: indexStore?.reason || "sqlite_unavailable" });
     }
     return res.json({ ok: true, stats: indexStore.stats() });
+  });
+
+  app.get("/api/v1/index/gap-hotspots", requireAuth, (_req, res) => {
+    const hotspots = loadGapHotspots();
+    const topSections = Object.entries(hotspots.sections || {})
+      .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
+      .slice(0, 12)
+      .map(([section, count]) => ({ section, count: Number(count || 0) }));
+    const topIssues = Object.entries(hotspots.issues || {})
+      .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
+      .slice(0, 8)
+      .map(([code, count]) => ({ code, count: Number(count || 0) }));
+    return res.json({
+      ok: true,
+      hotspots: {
+        source: hotspots.source,
+        generatedAt: hotspots.generatedAt,
+        reportPath: hotspots.reportPath || null,
+        totalRepos: Number(hotspots.totalRepos || 0),
+        topSections,
+        topIssues,
+      },
+    });
   });
 
   app.post("/api/v1/repos/contract-gap", requireAuth, (req, res) => {
@@ -4014,6 +4392,242 @@ export function createApp() {
     trimHistory();
     persistDataStore();
     return res.json({ ok: true, runId: run.id, ...output });
+  });
+
+  app.post("/api/v1/masterpiece/finish/run", requireAuth, async (req, res) => {
+    const parsed = FinishingRunSchema.safeParse(req.body || {});
+    if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+    const p = parsed.data;
+    const startedMs = Date.now();
+    const runId = nowId("finish");
+
+    const timeoutTierConfig = {
+      fast: { perQuery: 10, maxResults: 30, redditLimit: 16 },
+      standard: { perQuery: 18, maxResults: 50, redditLimit: 24 },
+      deep: { perQuery: 24, maxResults: 70, redditLimit: 32 },
+    }[p.timeoutTier || "standard"];
+
+    const discoveryQueries = [
+      `${p.productName} playwright e2e visual regression`,
+      `${p.productName} contract testing webhook billing`,
+      `${p.userGoal} deterministic e2e harness`,
+      "best open source ci quality gates lighthouse axe playwright",
+    ];
+
+    const seedRepos = topViralBenchmarkSeeds(Math.max(12, p.benchmarkTopK));
+    const scoutCacheKey = deterministicHash({
+      mode: "finishing_scout",
+      timeoutTier: p.timeoutTier,
+      queries: discoveryQueries,
+      seedRepos: seedRepos.map((r) => r.full_name),
+      minStars: p.minStars,
+      topK: p.benchmarkTopK,
+    });
+
+    let scoutRepos = getHybridCache(MAGIC_RUN_SCOUT_CACHE, scoutCacheKey, "finishing_scout", discoveryQueries.join(" | ")) || [];
+    if (!scoutRepos.length) {
+      try {
+        const discovered = await discoverScoutRepos({
+          queries: discoveryQueries,
+          perQuery: timeoutTierConfig.perQuery,
+          minStars: p.minStars,
+          topK: p.benchmarkTopK,
+          seedRepos,
+          githubToken: GITHUB_TOKEN,
+        });
+        scoutRepos = deterministicRepoSort(discovered)
+          .filter((r) => Number(r.stargazers_count || r.stars || 0) >= p.minStars)
+          .slice(0, p.benchmarkTopK)
+          .map((r) => ({
+            full_name: r.full_name,
+            name: r.name,
+            stars: Number(r.stargazers_count || r.stars || 0),
+            forks: Number(r.forks_count || r.forks || 0),
+            description: r.description || "",
+            topics: Array.isArray(r.topics) ? r.topics : [],
+            uiEvidence: Number(r.uiEvidence || 0),
+            breakPatternEvidence: Number(r.breakPatternEvidence || 0),
+          }));
+        setHybridCache(MAGIC_RUN_SCOUT_CACHE, scoutCacheKey, "finishing_scout", discoveryQueries.join(" | "), scoutRepos);
+      } catch (err) {
+        return res.status(502).json({ ok: false, error: "finishing_scout_failed", detail: String(err?.message || err) });
+      }
+    }
+
+    const benchCacheKey = deterministicHash({
+      mode: "finishing_bench",
+      scout: scoutRepos.map((r) => [r.full_name, Number(r.stars || 0), Number(r.uiEvidence || 0)]),
+      topK: p.benchmarkTopK,
+    });
+    let benchmark = getHybridCache(MAGIC_RUN_BENCH_CACHE, benchCacheKey, "finishing_benchmark", p.userGoal) || [];
+    if (!benchmark.length) {
+      benchmark = deterministicRepoSort(benchmarkRepos(scoutRepos, 0.6, 0.4)).slice(0, p.benchmarkTopK);
+      setHybridCache(MAGIC_RUN_BENCH_CACHE, benchCacheKey, "finishing_benchmark", p.userGoal, benchmark);
+    }
+
+    let githubReport = null;
+    let redditReport = null;
+    try {
+      githubReport = await doGithubResearch({
+        query: buildScopedGithubQuery({
+          productName: p.productName,
+          userGoal: p.userGoal,
+          queries: [...discoveryQueries, "playwright", "lighthouse", "axe-core", "contract testing"],
+        }, 220),
+        perPage: 20,
+        maxResults: timeoutTierConfig.maxResults,
+        githubToken: GITHUB_TOKEN,
+      });
+    } catch {
+      githubReport = null;
+    }
+    try {
+      redditReport = await doRedditResearch({
+        query: buildScopedGithubQuery({
+          productName: p.productName,
+          userGoal: p.userGoal,
+          queries: [...discoveryQueries, "user friction", "conversion"],
+        }, 220),
+        subreddits: selectIntentSubreddits({
+          productName: p.productName,
+          userGoal: p.userGoal,
+          queries: discoveryQueries,
+        }, REDDIT_DEFAULT_SUBREDDITS),
+        limitPerSubreddit: timeoutTierConfig.redditLimit,
+        timeWindow: "year",
+        maxResults: timeoutTierConfig.maxResults,
+        redditUserAgent: REDDIT_USER_AGENT,
+        redditAuthProfiles,
+        redditRequestTimeoutMs: REDDIT_REQUEST_TIMEOUT_MS,
+      });
+    } catch {
+      redditReport = null;
+    }
+
+    const fusion = buildFusionLeaderboard({
+      benchmarkRepos: benchmark,
+      githubReport,
+      redditReport,
+      topK: p.benchmarkTopK,
+    });
+
+    const exemplars = deterministicRepoSort(
+      (Array.isArray(fusion?.leaderboard) && fusion.leaderboard.length
+        ? fusion.leaderboard
+        : benchmark
+      ).map((x) => ({
+        full_name: x.full_name,
+        score: Number(x.fusionScore || x.benchmarkScore || 0),
+        stars: Number(x.stars || 0),
+        url: `https://github.com/${x.full_name}`,
+        reasons: Array.isArray(x.reasons) ? x.reasons.slice(0, 3) : [],
+      }))
+    ).slice(0, p.benchmarkTopK);
+
+    const evidence = buildEvidencePack({ githubReport, redditReport, fusion, top: Math.min(12, p.benchmarkTopK) });
+    const decisionCitations = buildDecisionCitations({
+      selectedRepos: exemplars.map((x) => ({ full_name: x.full_name, benchmarkScore: x.score })),
+      evidence,
+    });
+    const coverage = buildRepoCoverage(p.focusRepos);
+    const avgExemplarScore = exemplars.length
+      ? exemplars.reduce((acc, x) => acc + Number(x.score || 0), 0) / exemplars.length
+      : 0;
+    const qualityScore = Math.max(0, Math.min(1, Number((avgExemplarScore / 100).toFixed(3))));
+    const executionBridge = buildFinishingExecutionBridge({
+      focusRepos: p.focusRepos,
+      coverage,
+      qualityScore,
+    });
+    const hotspotProfile = loadGapHotspots();
+    const hotspotTopSections = Object.entries(hotspotProfile.sections || {})
+      .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
+      .slice(0, 10)
+      .map(([section, count]) => ({ section, count: Number(count || 0) }));
+    const hotspotTopIssues = Object.entries(hotspotProfile.issues || {})
+      .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
+      .slice(0, 8)
+      .map(([code, count]) => ({ code, count: Number(count || 0) }));
+    const planHash = deterministicHash({
+      productName: p.productName,
+      userGoal: p.userGoal,
+      stack: p.stack,
+      focusRepos: p.focusRepos,
+      exemplars: exemplars.map((x) => x.full_name),
+    });
+
+    const output = {
+      mode: "finishing_process_v1",
+      productName: p.productName,
+      planHash,
+      timeToFirstWowMs: Date.now() - startedMs,
+      qualityArchitecture: FINISHING_QUALITY_ARCHITECTURE,
+      humanLikeE2EStandard: FINISHING_HUMAN_E2E_STANDARD,
+      uxUiImprovementLoop: FINISHING_UX_LOOP,
+      repoCriticalFlowCoverage: coverage,
+      releaseGate: FINISHING_RELEASE_GATE,
+      immediateImplementationOrder: FINISHING_IMMEDIATE_ORDER,
+      bestOpenSourceExemplars: exemplars,
+      evidence,
+      decisionCitations,
+      gapHotspots: {
+        source: hotspotProfile.source,
+        generatedAt: hotspotProfile.generatedAt,
+        reportPath: hotspotProfile.reportPath || null,
+        totalRepos: Number(hotspotProfile.totalRepos || 0),
+        topSections: hotspotTopSections,
+        topIssues: hotspotTopIssues,
+      },
+      executionBridge,
+      benchmark,
+      fusion,
+      markdownPlan: [
+        `# ${p.productName} Finishing Process`,
+        "",
+        `Goal: ${p.userGoal}`,
+        `Plan Hash: ${planHash}`,
+        `Time To First Wow (ms): ${Date.now() - startedMs}`,
+        "",
+        "## Release Gate",
+        ...FINISHING_RELEASE_GATE.map((x) => `- [ ] ${x}`),
+        "",
+        "## Top OSS Exemplars",
+        ...exemplars.slice(0, 8).map((x) => `- ${x.full_name} (${Number(x.score || 0).toFixed(2)})`),
+        "",
+        "## Active Gap Hotspots (Learning Loop)",
+        ...hotspotTopSections.slice(0, 8).map((x) => `- ${x.section}: ${x.count}`),
+        "",
+        "## Repo Coverage",
+        ...coverage.map((x) => `- ${x.repo}: ${x.criticalFlows.join(", ")}`),
+      ].join("\n"),
+    };
+
+    const run = {
+      id: runId,
+      type: "finishing_process",
+      createdAt: new Date().toISOString(),
+      payload: p,
+      output,
+    };
+    appState.runs.unshift(run);
+    if (indexStore?.enabled) {
+      indexStore.refreshRepos({ repos: benchmark, source: "finishing_benchmark" });
+      indexStore.refreshRepos({
+        repos: exemplars.map((x) => ({ full_name: x.full_name, stars: x.stars, score: x.score })),
+        source: "finishing_exemplars",
+      });
+      indexStore.saveSnapshots({ runId, stage: "finishing_benchmark", repos: benchmark });
+      indexStore.saveSnapshots({
+        runId,
+        stage: "finishing_fusion",
+        repos: Array.isArray(fusion?.leaderboard) ? fusion.leaderboard : [],
+      });
+      if (githubReport) indexStore.saveGithubEvidence({ query: p.userGoal, report: githubReport });
+      if (redditReport) indexStore.saveRedditEvidence({ query: p.userGoal, report: redditReport });
+    }
+    trimHistory();
+    persistDataStore();
+    return res.json({ ok: true, runId, ...output });
   });
 
   app.post("/api/v1/masterpiece/recompile", requireAuth, (req, res) => {
