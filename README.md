@@ -118,6 +118,17 @@ npm ci
 npm run setup:auto
 npm run setup:index:shared
 npm run dev:auto
+
+## Public Push Policy
+
+- Branch policy: `main` is the public release line.
+- Run before every push:
+
+```bash
+npm run public:safety:check
+```
+
+- Full policy: [docs/PUSH-RULES.md](docs/PUSH-RULES.md)
 ```
 
 Health and checks:
@@ -334,6 +345,14 @@ See:
 ## Pipeline: Video → index → brief → research → benchmark → InayanBuilderBot
 
 Repeatable flow from tutorial videos and research to a shippable builder: add YouTube URLs to claw-architect, run `youtube:index:auto` and `youtube:index:to-brief`, then Reddit/search and `repo:completion:gap --repo InayanBuilderBot`; run `inayan:full-cycle --until-repo InayanBuilderBot` until no gaps. See [`docs/RUNBOOK.md`](./docs/RUNBOOK.md).
+
+## Automated content creator (video → content)
+
+Use InayanBuilderBot **with** [claw-architect](https://github.com/your-org/claw-architect) for a single pipeline from **video URLs to research and content-ready briefs**:
+
+1. In claw-architect: **`npm run content-creator:pipeline`** — runs YouTube index → brief → Reddit search → builder research agenda. Produces `docs/INAYAN-BUILDER-VIDEO-SPEC.md` and research reports.
+2. InayanBuilderBot: **`POST /api/v1/reddit/search`**, **`POST /api/v1/research/fusion`**, **`POST /api/v1/masterpiece/magic-run`** — deepen research and get blueprints.
+3. claw-architect: use the brief to drive **copy or script generation** (goal API, `aicreator`, `copy_lab_run`). See claw-architect `docs/CONTENT-CREATOR.md`.
 
 ## Documentation Index
 

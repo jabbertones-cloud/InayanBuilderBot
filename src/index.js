@@ -21,7 +21,7 @@ const envFile = path.join(rootDir, ".env");
 const envExampleFile = path.join(rootDir, ".env.example");
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
-const CLAW_ARCHITECT_ROOT = process.env.CLAW_ARCHITECT_ROOT || "/Users/tatsheen/claw-architect";
+const CLAW_ARCHITECT_ROOT = process.env.CLAW_ARCHITECT_ROOT || "$HOME/claw-architect";
 const DEFAULT_YOUTUBE_INDEX_PATH = path.join(
   CLAW_ARCHITECT_ROOT,
   "reports",
@@ -1408,7 +1408,7 @@ function resolveGapHotspotReportPath() {
   const candidates = [
     process.env.GAP_HOTSPOT_REPORT_PATH,
     path.join(CLAW_ARCHITECT_ROOT, "reports", "repo-completion-gap-rolling.json"),
-    "/Users/tatsheen/.codex/worktrees/243e/claw-architect/reports/repo-completion-gap-rolling.json",
+    "$HOME/claw-architect/reports/repo-completion-gap-rolling.json",
   ].filter(Boolean);
   return candidates.find((p) => fs.existsSync(String(p))) || null;
 }

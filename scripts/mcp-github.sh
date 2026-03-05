@@ -11,7 +11,7 @@ fi
 
 # Fallback to claw-architect env for shared local credentials when missing here.
 if [[ -z "${GITHUB_PERSONAL_ACCESS_TOKEN:-}" && -z "${GITHUB_TOKEN:-}" ]]; then
-  CLAW_ENV_ROOT="${CLAW_ARCHITECT_ROOT:-/Users/tatsheen/claw-architect}"
+  CLAW_ENV_ROOT="${CLAW_ARCHITECT_ROOT:-$HOME/claw-architect}"
   if [[ -f "$CLAW_ENV_ROOT/.env" ]]; then
     set -a
     # shellcheck disable=SC1090

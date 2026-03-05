@@ -41,6 +41,20 @@ Repeatable pipeline used to drive InayanBuilderBot from tutorial videos and rese
 5. **Benchmark** → `npm run repo:completion:gap -- --repo InayanBuilderBot` (in claw-architect).
 6. **Update** → Apply improvements to InayanBuilderBot (this repo); run full cycle until no gaps: `npm run inayan:full-cycle -- --until-repo InayanBuilderBot` (in claw-architect).
 
+## Automated content creator (video → content)
+
+To use InayanBuilderBot **and** claw-architect together as an **automated content creator** (videos → research → scripts/copy):
+
+1. **One-command pipeline (in claw-architect):**  
+   `npm run content-creator:pipeline`  
+   This runs: YouTube index (transcript + metadata) → brief → Reddit search → builder research agenda. Outputs: `docs/INAYAN-BUILDER-VIDEO-SPEC.md`, Reddit and research agenda reports.
+
+2. **Research APIs (this repo):**  
+   Call `POST /api/v1/reddit/search` and `POST /api/v1/research/fusion` for more research. Use `POST /api/v1/masterpiece/magic-run` for blueprints and execution tasks.
+
+3. **Content generation (claw-architect):**  
+   Use the brief and research to drive copy/script generation: submit a goal to Mission Control (`POST /api/goal`) or queue `aicreator` / `copy_lab_run` with a goal derived from the brief. See claw-architect `docs/CONTENT-CREATOR.md`.
+
 ## First run (this repo)
 
 ```bash
