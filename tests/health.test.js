@@ -1050,3 +1050,88 @@ test("pipeline run persists benchmark snapshots into sqlite index", async () => 
     delete process.env.SQLITE_INDEX_ENABLED;
   }
 });
+
+test("video bootstrap endpoint builds transcript-grounded advanced plan", async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "inayan-video-bootstrap-"));
+  const indexPath = path.join(tempDir, "youtube-transcript-visual-index-latest.json");
+  fs.writeFileSync(indexPath, JSON.stringify({
+    summary: { generated_at: "2026-03-05T05:19:32.215Z" },
+    rows: [
+      {
+        video_id: "2UxulrochNI",
+        url: "https://www.youtube.com/watch?v=2UxulrochNI",
+        metadata: {
+          title: "This AI Clone Automation Creates Unique Content Daily! (100% Automated!)",
+          channel: "AI Andy",
+          duration: 3432,
+          upload_date: "20260303",
+        },
+        transcript: {
+          segment_count: 4,
+          segments: [
+            { text: "Take a look at this automation. It's making five videos daily posted on YouTube, Facebook, Instagram, Tik Tok." },
+            { text: "100% automated. No filming, no voice over, no editing, not even publishing." },
+            { text: "The Air Table that controls it all and the setup guide." },
+            { text: "Download the N template and configure the workflow." },
+          ],
+        },
+      },
+    ],
+  }, null, 2));
+
+  process.env.YOUTUBE_INDEX_PATH = indexPath;
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+
+  try {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/content/video-bootstrap`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        videoId: "2UxulrochNI",
+        dailyVideos: 5,
+        platforms: ["youtube", "facebook", "instagram", "tiktok"],
+        mode: "advanced",
+      }),
+    });
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.plan.source.video_id, "2UxulrochNI");
+    assert.equal(body.plan.transcript_signals.five_videos_daily_claim, true);
+    assert.equal(body.plan.transcript_signals.references_airtable, true);
+    assert.equal(Array.isArray(body.plan.starting_point.advanced_features), true);
+    assert.equal(body.plan.starting_point.advanced_features.length >= 4, true);
+  } finally {
+    server.close();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+    delete process.env.YOUTUBE_INDEX_PATH;
+  }
+});
+
+test("video bootstrap endpoint returns 404 when transcript index is missing", async () => {
+  process.env.YOUTUBE_INDEX_PATH = path.join(os.tmpdir(), "missing-youtube-index.json");
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+
+  try {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/content/video-bootstrap`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoId: "2UxulrochNI" }),
+    });
+    const body = await response.json();
+    assert.equal(response.status, 404);
+    assert.equal(body.ok, false);
+    assert.equal(body.error, "index_missing");
+  } finally {
+    server.close();
+    delete process.env.YOUTUBE_INDEX_PATH;
+  }
+});
