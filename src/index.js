@@ -22,6 +22,11 @@ const envExampleFile = path.join(rootDir, ".env.example");
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const CLAW_ARCHITECT_ROOT = process.env.CLAW_ARCHITECT_ROOT || "/Users/tatsheen/claw-architect";
+const DEFAULT_YOUTUBE_INDEX_PATH = path.join(
+  CLAW_ARCHITECT_ROOT,
+  "reports",
+  "youtube-transcript-visual-index-latest.json"
+);
 
 const appState = {
   runs: [],
@@ -2016,6 +2021,210 @@ function parseEnvList(raw) {
     .filter(Boolean);
 }
 
+function parseYouTubeVideoId(input = "") {
+  const value = String(input || "").trim();
+  if (!value) return "";
+  const match = value.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{6,20})/);
+  if (match && match[1]) return match[1];
+  if (/^[A-Za-z0-9_-]{6,20}$/.test(value)) return value;
+  return "";
+}
+
+function loadYoutubeTranscriptIndex(indexPath = DEFAULT_YOUTUBE_INDEX_PATH) {
+  if (!fs.existsSync(indexPath)) {
+    return {
+      ok: false,
+      error: "index_missing",
+      detail: `youtube transcript index not found at ${indexPath}`,
+    };
+  }
+  try {
+    const data = JSON.parse(fs.readFileSync(indexPath, "utf8"));
+    const rows = Array.isArray(data?.rows) ? data.rows : [];
+    return { ok: true, rows, summary: data?.summary || null, indexPath };
+  } catch (err) {
+    return {
+      ok: false,
+      error: "index_invalid_json",
+      detail: String(err?.message || err),
+      indexPath,
+    };
+  }
+}
+
+function pickVideoRow(rows, { videoId, url } = {}) {
+  if (!Array.isArray(rows) || !rows.length) return null;
+  const targetVideoId = parseYouTubeVideoId(videoId || url || "");
+  const targetUrl = String(url || "").trim();
+  if (!targetVideoId && !targetUrl) return rows[0];
+  const found = rows.find((row) => {
+    const rowVideoId = String(row?.video_id || "").trim();
+    const rowUrl = String(row?.url || "").trim();
+    return (
+      (targetVideoId && rowVideoId === targetVideoId)
+      || (targetVideoId && parseYouTubeVideoId(rowUrl) === targetVideoId)
+      || (targetUrl && rowUrl === targetUrl)
+    );
+  });
+  return found || null;
+}
+
+function buildVideoTranscriptText(row = {}, maxSegments = 800) {
+  const segments = Array.isArray(row?.transcript?.segments) ? row.transcript.segments : [];
+  return segments
+    .slice(0, maxSegments)
+    .map((s) => String(s?.text || "").trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+function detectTranscriptBoolean(text, needles = []) {
+  const hay = String(text || "").toLowerCase();
+  return needles.some((needle) => hay.includes(String(needle).toLowerCase()));
+}
+
+function buildInayanVideoBootstrapPlan({
+  row,
+  sourceSummary,
+  requestedPlatforms,
+  dailyVideos,
+  mode,
+}) {
+  const transcriptText = buildVideoTranscriptText(row, 1200);
+  const metadata = row?.metadata || {};
+  const transcript = row?.transcript || {};
+  const normalizedPlatforms = Array.from(
+    new Set(
+      (Array.isArray(requestedPlatforms) ? requestedPlatforms : [])
+        .map((p) => String(p || "").trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
+  const hasFiveDailySignal = detectTranscriptBoolean(transcriptText, ["five videos daily", "five ai clone videos"]);
+  const hasAutomationSignal = detectTranscriptBoolean(transcriptText, ["100% automated", "automations", "contentmate"]);
+  const hasAirtableSignal = detectTranscriptBoolean(transcriptText, ["air table", "airtable"]);
+  const hasN8nSignal = detectTranscriptBoolean(transcriptText, ["n8n", "n template"]);
+  const hasPublishSignal = detectTranscriptBoolean(transcriptText, ["not even publishing", "posted on"]);
+
+  const recommendedThroughput = hasFiveDailySignal ? Math.max(5, dailyVideos) : dailyVideos;
+  const objective = `Launch an automation system that can publish ${recommendedThroughput} short-form videos per day across ${normalizedPlatforms.join(", ")} with deterministic quality gates and retry-safe delivery.`;
+
+  const advancedFeatures = [
+    {
+      id: "multi-platform-fanout",
+      title: "Multi-platform fanout with per-platform adapters",
+      why: "Video emphasizes same content stream across YouTube/Facebook/Instagram/TikTok.",
+      implementation: [
+        "Build one canonical content object (hook, script, CTA, assets).",
+        "Transform that object into platform-specific payloads (caption, hashtags, duration limits).",
+        "Track publishing status per platform with idempotency keys.",
+      ],
+    },
+    {
+      id: "template-driven-workflow",
+      title: "Template-driven workflow orchestration",
+      why: "Transcript repeatedly references using a prebuilt template and step-by-step setup.",
+      implementation: [
+        "Store workflow template version and required env keys in config.",
+        "Validate mandatory setup before each run (missing keys, API health).",
+        "Gate all publish operations behind setup checks.",
+      ],
+    },
+    {
+      id: "daily-scheduler-and-batcher",
+      title: "Daily scheduler + batch generation",
+      why: "Core claim is consistent daily volume without manual work.",
+      implementation: [
+        `Generate ${recommendedThroughput} candidate posts in one batch run.`,
+        "Queue with jittered schedule windows to avoid platform spam flags.",
+        "Persist run ledger with per-item retries and failure reason taxonomy.",
+      ],
+    },
+    {
+      id: "quality-and-safety-guardrails",
+      title: "Quality and safety guardrails",
+      why: "Video warns setup mistakes can waste hours/days and real money.",
+      implementation: [
+        "Add preflight validation (schema, token budget, required assets, policy checks).",
+        "Run content lint pass (hook quality, CTA clarity, banned claims).",
+        "Hard-stop publish when validation score is below threshold.",
+      ],
+    },
+  ];
+
+  const executionPlan = [
+    {
+      phase: "Phase 1",
+      name: "Transcript-grounded starter build",
+      tasks: [
+        "Ingest source video transcript + metadata.",
+        "Extract content angle, hook patterns, and platform targets.",
+        "Create deterministic starter blueprint and baseline queue config.",
+      ],
+    },
+    {
+      phase: "Phase 2",
+      name: "Automation hardening",
+      tasks: [
+        "Add retries, idempotency, and observability dashboards.",
+        "Implement platform adapters and publish-state tracking.",
+        "Integrate preflight checks for env and external API dependencies.",
+      ],
+    },
+    {
+      phase: "Phase 3",
+      name: "Scale and optimization",
+      tasks: [
+        "A/B test hooks, CTA formats, and posting windows.",
+        "Rank winning patterns and auto-promote them in generation prompts.",
+        "Route low-performing templates to recompile workflow.",
+      ],
+    },
+  ];
+
+  const transcriptExcerpt = (Array.isArray(transcript?.segments) ? transcript.segments : [])
+    .slice(0, 12)
+    .map((s) => String(s?.text || "").trim())
+    .filter(Boolean)
+    .join(" ")
+    .slice(0, 1600);
+
+  return {
+    source: {
+      video_id: row?.video_id || "",
+      url: row?.url || "",
+      title: metadata?.title || "",
+      channel: metadata?.channel || "",
+      duration_seconds: Number(metadata?.duration || 0) || null,
+      upload_date: metadata?.upload_date || null,
+      transcript_segment_count: Number(transcript?.segment_count || 0) || 0,
+      generated_at: sourceSummary?.generated_at || null,
+    },
+    transcript_signals: {
+      five_videos_daily_claim: hasFiveDailySignal,
+      full_automation_claim: hasAutomationSignal,
+      references_airtable: hasAirtableSignal,
+      references_n8n_template: hasN8nSignal,
+      references_cross_platform_publish: hasPublishSignal,
+    },
+    starting_point: {
+      mode,
+      objective,
+      recommended_daily_videos: recommendedThroughput,
+      platforms: normalizedPlatforms,
+      advanced_features: advancedFeatures,
+      execution_plan: executionPlan,
+      operational_guardrails: [
+        "Require setup validation before generation and publish stages.",
+        "Use idempotency keys for each planned content item.",
+        "Attach retries with bounded backoff for third-party APIs.",
+        "Persist run logs and failure reasons for each publish attempt.",
+      ],
+    },
+    transcript_excerpt: transcriptExcerpt,
+  };
+}
+
 function buildRedditAuthProfiles({
   defaultUserAgent,
   explicitProfilesJson,
@@ -2863,6 +3072,15 @@ const ChatSchema = z.object({
     productName: z.string().optional(),
     stack: z.array(z.string()).optional(),
   }).optional(),
+});
+
+const VideoBootstrapSchema = z.object({
+  videoId: z.string().min(6).max(20).optional(),
+  url: z.string().url().optional(),
+  dailyVideos: z.number().int().min(1).max(40).default(5),
+  platforms: z.array(z.enum(["youtube", "facebook", "instagram", "tiktok", "x", "linkedin"])).min(1).max(8)
+    .default(["youtube", "facebook", "instagram", "tiktok"]),
+  mode: z.enum(["starter", "advanced"]).default("advanced"),
 });
 
 const OpenClawScoutSchema = z.object({
@@ -4945,6 +5163,72 @@ export function createApp() {
 
   app.get("/api/v1/chat/providers", requireAuth, (_req, res) => {
     return res.json({ ok: true, ...providerStatus, metrics: appState.providerMetrics });
+  });
+
+  app.post("/api/v1/content/video-bootstrap", requireAuth, (req, res) => {
+    const parsed = VideoBootstrapSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
+    }
+
+    const p = parsed.data;
+    const indexPath = String(process.env.YOUTUBE_INDEX_PATH || DEFAULT_YOUTUBE_INDEX_PATH).trim();
+    const loaded = loadYoutubeTranscriptIndex(indexPath);
+    if (!loaded.ok) {
+      return res.status(404).json({
+        ok: false,
+        error: loaded.error || "index_not_available",
+        detail: loaded.detail || "youtube transcript index is unavailable",
+        indexPath,
+      });
+    }
+    if (!loaded.rows.length) {
+      return res.status(404).json({
+        ok: false,
+        error: "index_empty",
+        detail: "youtube transcript index contains no rows",
+        indexPath,
+      });
+    }
+
+    const row = pickVideoRow(loaded.rows, { videoId: p.videoId, url: p.url });
+    if (!row) {
+      return res.status(404).json({
+        ok: false,
+        error: "video_not_found",
+        detail: "No matching video found in transcript index",
+        requested: { videoId: p.videoId || null, url: p.url || null },
+      });
+    }
+
+    const plan = buildInayanVideoBootstrapPlan({
+      row,
+      sourceSummary: loaded.summary || {},
+      requestedPlatforms: p.platforms,
+      dailyVideos: p.dailyVideos,
+      mode: p.mode,
+    });
+
+    const runId = nowId("video_bootstrap");
+    appState.runs.unshift({
+      id: runId,
+      type: "video_bootstrap_plan",
+      createdAt: new Date().toISOString(),
+      payload: p,
+      output: { ok: true, plan },
+    });
+    trimHistory();
+    persistDataStore();
+
+    return res.json({
+      ok: true,
+      runId,
+      plan,
+      source_index: {
+        path: indexPath,
+        rows: loaded.rows.length,
+      },
+    });
   });
 
   app.get("/health", (_req, res) => {
