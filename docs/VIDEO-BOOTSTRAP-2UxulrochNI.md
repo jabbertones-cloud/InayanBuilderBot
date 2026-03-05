@@ -23,7 +23,7 @@ Request example:
 
 The endpoint reads transcript index data from:
 
-`$YOUTUBE_INDEX_PATH` (or default: `/Users/tatsheen/claw-architect/reports/youtube-transcript-visual-index-latest.json`)
+`$YOUTUBE_INDEX_PATH` (or default: `$HOME/claw-architect/reports/youtube-transcript-visual-index-latest.json`)
 
 ## Signals learned from transcript
 
