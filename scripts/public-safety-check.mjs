@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 
-const pattern = "(/Users/|MacBook-Pro|tatsheen|jamonwidit@|plushtrap\\.com)";
+const pattern = "(/Users/|MacBook-Pro|tatsheen|jamonwidit@|plushtrap\\.com|plushtrap/|Tatsheens-Mini|\\(408\\) 386-1907|408-386-1907|/Volumes/home/Storage|\\bScott\\b)";
 const args = [
   "-n",
   pattern,

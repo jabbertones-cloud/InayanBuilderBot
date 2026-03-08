@@ -15,6 +15,10 @@
 - keep runtime secrets in environment variables
 - use `.env.example` placeholders only
 
+## Public Push Privacy
+
+Run `npm run public:safety:check` before every push. It blocks personal identifiers: local paths (`/Users/`, `/Volumes/home/Storage`), machine names, usernames, personal emails, phone numbers, and first names.
+
 ## Operator Checklist
 
 - set strong `BUILDERBOT_API_KEY`
