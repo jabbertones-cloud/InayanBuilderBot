@@ -1,0 +1,61 @@
+// Add these entries to your main package.json under "scripts" and "devDependencies"
+
+// SCRIPTS SECTION
+{
+  "scripts": {
+    // AI Exploratory Testing
+    "ai-explorer": "ts-node qa/ai-explorer/run-explorer.ts",
+    "ai-explorer:quick": "npm run ai-explorer -- --steps 100 --strategy random --output ./qa-reports/quick",
+    "ai-explorer:standard": "npm run ai-explorer -- --steps 500 --strategy mixed --output ./qa-reports/standard",
+    "ai-explorer:thorough": "npm run ai-explorer -- --steps 2000 --strategy mixed --chaos --output ./qa-reports/thorough",
+    "ai-explorer:chaos": "npm run ai-explorer -- --steps 1000 --strategy chaos --chaos --output ./qa-reports/chaos",
+    "ai-explorer:boundary": "npm run ai-explorer -- --steps 500 --strategy boundary --output ./qa-reports/boundary",
+    "ai-explorer:focused": "npm run ai-explorer -- --steps 300 --focus onboarding,sync --output ./qa-reports/focused",
+    "ai-explorer:dry": "npm run ai-explorer -- --dry-run",
+    "ai-explorer:onboarding": "npm run ai-explorer -- --steps 300 --focus onboarding --strategy grammar --output ./qa-reports/onboarding",
+    "ai-explorer:sync": "npm run ai-explorer -- --steps 500 --focus sync --strategy mixed --chaos --output ./qa-reports/sync",
+
+    // QA Reporting
+    "qa:reports:view": "open qa-reports/report-*.md 2>/dev/null || cat qa-reports/report-*.md",
+    "qa:reports:clean": "rm -rf qa-reports/*",
+    "qa:reports:summary": "node -e \"const fs=require('fs'); const files=fs.readdirSync('qa-reports').filter(f=>f.endsWith('.json')); files.forEach(f => { const data=JSON.parse(fs.readFileSync('qa-reports/'+f)); console.log('\\n'+data.sessionId+': '+data.bugsFound+' bugs found, '+data.coverage.coveragePercent.toFixed(1)+'% coverage'); }); \"",
+
+    // CI Integration
+    "ci:qa": "npm run ai-explorer -- --steps 500 --strategy mixed --output ./ci-reports",
+    "ci:qa:nightly": "npm run ai-explorer -- --steps 2000 --strategy mixed --chaos --output ./ci-reports/nightly",
+    "ci:qa:pr": "npm run ai-explorer -- --steps 200 --strategy random --output ./ci-reports/pr"
+  }
+}
+
+// DEVDEPENDENCIES SECTION
+{
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "playwright": "^1.40.0",
+    "commander": "^11.1.0",
+    "typescript": "^5.3.0",
+    "@types/node": "^20.10.0"
+  }
+}
+
+// INSTALLATION INSTRUCTIONS
+/*
+1. Copy the entries above to your package.json
+
+2. Install dependencies:
+   npm install
+
+3. Run a test exploration:
+   npm run ai-explorer:quick
+
+4. View results:
+   npm run qa:reports:view
+
+5. Integrate into CI:
+   - Add "npm run ci:qa" to your CI pipeline for pull requests
+   - Add "npm run ci:qa:nightly" to your nightly test schedule
+
+6. Configure for your environment:
+   - Copy .explorerrc.example.json to .explorerrc.json
+   - Customize the paths and settings for your setup
+*/

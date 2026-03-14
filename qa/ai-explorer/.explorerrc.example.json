@@ -1,0 +1,182 @@
+{
+  "description": "Example configuration file for AI Exploratory Testing Agent",
+  "instruction": "Copy this to .explorerrc.json and customize for your environment",
+  "profiles": {
+    "quick": {
+      "maxSteps": 100,
+      "timeout": 30000,
+      "strategy": "random",
+      "enableChaos": false,
+      "description": "Quick smoke test - 2 minutes"
+    },
+    "standard": {
+      "maxSteps": 500,
+      "timeout": 30000,
+      "strategy": "mixed",
+      "enableChaos": false,
+      "description": "Standard QA run - 10 minutes"
+    },
+    "thorough": {
+      "maxSteps": 2000,
+      "timeout": 60000,
+      "strategy": "mixed",
+      "enableChaos": true,
+      "description": "Comprehensive testing - 40 minutes"
+    },
+    "chaos": {
+      "maxSteps": 1000,
+      "timeout": 60000,
+      "strategy": "chaos",
+      "enableChaos": true,
+      "focusAreas": ["sync", "offline", "recovery"],
+      "description": "Chaos engineering focused - 20 minutes"
+    },
+    "boundary": {
+      "maxSteps": 500,
+      "timeout": 30000,
+      "strategy": "boundary",
+      "enableChaos": false,
+      "description": "Edge cases and input validation - 10 minutes"
+    },
+    "onboarding": {
+      "maxSteps": 300,
+      "timeout": 30000,
+      "strategy": "grammar",
+      "enableChaos": false,
+      "focusAreas": ["onboarding", "settings"],
+      "description": "New user experience testing - 5 minutes"
+    }
+  },
+  "defaults": {
+    "maxSteps": 500,
+    "timeout": 30000,
+    "strategy": "mixed",
+    "focusAreas": [],
+    "enableChaos": false,
+    "outputDir": "./qa-reports",
+    "appPath": "./build/mac/MorningOps.app"
+  },
+  "anomalyThresholds": {
+    "memoryGrowthPercent": 50,
+    "infiniteLoadingSeconds": 10,
+    "slowRequestSeconds": 5,
+    "similarityScoreForRegression": 0.7
+  },
+  "strategies": {
+    "random": {
+      "enabled": true,
+      "weight": 25,
+      "description": "Monkey testing - random element interactions"
+    },
+    "grammar": {
+      "enabled": true,
+      "weight": 35,
+      "description": "Grammar-based flows - valid user journeys"
+    },
+    "boundary": {
+      "enabled": true,
+      "weight": 25,
+      "description": "Boundary testing - edge cases and extremes"
+    },
+    "chaos": {
+      "enabled": true,
+      "weight": 15,
+      "description": "Chaos testing - failure scenario injection"
+    }
+  },
+  "focusAreas": {
+    "onboarding": {
+      "keywords": ["welcome", "setup", "connect", "authenticate"],
+      "priority": "high"
+    },
+    "sync": {
+      "keywords": ["sync", "calendar", "refresh", "import"],
+      "priority": "high"
+    },
+    "messaging": {
+      "keywords": ["message", "email", "chat", "reply", "compose"],
+      "priority": "medium"
+    },
+    "settings": {
+      "keywords": ["settings", "preferences", "configuration", "account"],
+      "priority": "medium"
+    },
+    "notifications": {
+      "keywords": ["notification", "alert", "reminder"],
+      "priority": "low"
+    },
+    "integrations": {
+      "keywords": ["integration", "api", "plugin", "extension"],
+      "priority": "medium"
+    },
+    "help": {
+      "keywords": ["help", "support", "documentation", "faq"],
+      "priority": "low"
+    },
+    "offline": {
+      "keywords": ["offline", "sync", "cache", "storage"],
+      "priority": "high"
+    }
+  },
+  "chaosScenarios": {
+    "killBackend": {
+      "enabled": true,
+      "frequency": 0.05,
+      "description": "Kill backend process during operation"
+    },
+    "networkFlap": {
+      "enabled": true,
+      "frequency": 0.1,
+      "description": "Rapid network disconnect/reconnect"
+    },
+    "slowNetwork": {
+      "enabled": true,
+      "frequency": 0.1,
+      "latencyMs": 3000,
+      "description": "Add network latency"
+    },
+    "corruptDatabase": {
+      "enabled": false,
+      "frequency": 0.02,
+      "description": "Corrupt SQLite database (careful!)"
+    },
+    "fillDisk": {
+      "enabled": false,
+      "frequency": 0.02,
+      "percentFull": 90,
+      "description": "Fill disk space (careful!)"
+    },
+    "revokeToken": {
+      "enabled": true,
+      "frequency": 0.05,
+      "description": "Revoke OAuth token"
+    },
+    "cpuOverload": {
+      "enabled": false,
+      "frequency": 0.02,
+      "description": "Consume CPU resources"
+    },
+    "memoryPressure": {
+      "enabled": false,
+      "frequency": 0.02,
+      "memoryMb": 500,
+      "description": "Allocate memory pressure"
+    }
+  },
+  "reporting": {
+    "outputFormats": ["json", "markdown"],
+    "includeScreenshots": true,
+    "includeAccessibilityTree": true,
+    "includeNetworkLogs": true,
+    "includeConsoleLogs": true,
+    "maxBugsPerReport": 50,
+    "severityLevels": ["critical", "high", "medium", "low"]
+  },
+  "ci": {
+    "failOnCritical": true,
+    "failOnHigh": true,
+    "failOnMedium": false,
+    "uploadReports": true,
+    "reportPath": "./qa-reports"
+  }
+}

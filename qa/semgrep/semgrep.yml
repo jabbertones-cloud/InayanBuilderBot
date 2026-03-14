@@ -1,0 +1,574 @@
+rules:
+  # ============================================================================
+  # SECURITY RULES
+  # ============================================================================
+
+  # Security: Hardcoded API Keys and Secrets
+  - id: hardcoded-api-keys
+    pattern-either:
+      - patterns:
+          - pattern: |
+              $KEY = "...$SECRET$..."
+          - metavariable-regex:
+              metavariable: $SECRET
+              regex: '(api[_-]?key|apikey|api[_-]?secret|secret[_-]?key|token|bearer|authorization|password|passwd|pwd|auth)'
+              case-insensitive: true
+      - patterns:
+          - pattern: |
+              const $VAR = "...$CRED$..."
+          - metavariable-regex:
+              metavariable: $CRED
+              regex: '(sk_live|sk_test|pk_live|pk_test|stripe|aws_secret|mongodb\+srv|github_pat|ghp_)'
+              case-insensitive: true
+    message: >
+      Hardcoded API key, token, or secret detected. Move sensitive values to environment
+      variables or secure credential store. Use process.env.SECRET_NAME instead.
+    languages: [javascript, typescript]
+    severity: CRITICAL
+    metadata:
+      category: security
+      cwe: CWE-798
+      owasp: A2:2021 Cryptographic Failures
+      references:
+        - https://owasp.org/www-community/vulnerabilities/Sensitive_Data_Exposure
+
+  # Security: SQL Injection in better-sqlite3
+  - id: sql-injection-better-sqlite3
+    patterns:
+      - pattern-either:
+          - pattern: |
+              db.prepare($QUERY + $VAR)
+          - pattern: |
+              db.prepare(`...${$VAR}...`)
+          - pattern: |
+              db.prepare("..." + $VAR)
+          - pattern: |
+              db.exec($QUERY + $VAR)
+    message: >
+      SQL injection vulnerability detected. Use parameterized queries with ? placeholders
+      instead of string concatenation. Example: db.prepare("SELECT * FROM users WHERE id = ?")
+      .get(userId) instead of db.prepare("SELECT * FROM users WHERE id = " + userId)
+    languages: [javascript, typescript]
+    severity: CRITICAL
+    metadata:
+      category: security
+      cwe: CWE-89
+      owasp: A03:2021 Injection
+      references:
+        - https://github.com/WiseLibs/better-sqlite3#binding-parameters
+
+  # Security: Unsafe eval() usage
+  - id: unsafe-eval
+    patterns:
+      - pattern-either:
+          - pattern: eval(...)
+          - pattern: Function(...)
+          - pattern: vm.runInThisContext(...)
+    message: >
+      eval() and Function() constructors are dangerous security risks. They execute arbitrary
+      code and bypass CSP. Use safer alternatives like JSON.parse() for data or a proper
+      expression evaluator library.
+    languages: [javascript, typescript]
+    severity: CRITICAL
+    metadata:
+      category: security
+      cwe: CWE-95
+      owasp: A03:2021 Injection
+      references:
+        - https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/eval#never_use_eval!
+
+  # Security: Prototype Pollution
+  - id: prototype-pollution
+    patterns:
+      - pattern-either:
+          - pattern: $OBJ["__proto__"] = $VAL
+          - pattern: $OBJ["constructor"] = $VAL
+          - pattern: $OBJ["prototype"] = $VAL
+          - pattern: Object.assign($OBJ, $UNTRUSTED)
+    message: >
+      Potential prototype pollution vulnerability. Avoid assigning to __proto__, constructor,
+      or prototype properties. Use Object.create(null) for safe objects or validate/sanitize
+      untrusted input before merge operations.
+    languages: [javascript, typescript]
+    severity: HIGH
+    metadata:
+      category: security
+      cwe: CWE-1321
+      references:
+        - https://owasp.org/www-community/attacks/Prototype_pollution
+
+  # Security: Unsafe Deserialization
+  - id: unsafe-deserialization
+    patterns:
+      - pattern-either:
+          - pattern: |
+              eval($OBJ)
+          - pattern: |
+              serialize($OBJ)
+          - pattern: |
+              pickle.loads($OBJ)
+    message: >
+      Unsafe deserialization detected. Never deserialize untrusted data with eval or pickle.
+      Use JSON.parse() for JSON data and validate the structure after parsing.
+    languages: [javascript, typescript]
+    severity: CRITICAL
+    metadata:
+      category: security
+      cwe: CWE-502
+      references:
+        - https://owasp.org/www-community/vulnerabilities/Deserialization_of_untrusted_data
+
+  # Security: Missing CSRF Protection
+  - id: missing-csrf-protection
+    patterns:
+      - pattern-either:
+          - patterns:
+              - pattern: |
+                  ipcMain.handle('$ACTION', ...)
+              - metavariable-regex:
+                  metavariable: $ACTION
+                  regex: '(post|delete|put|patch)'
+                  case-insensitive: true
+              - pattern-not: |
+                  ipcMain.handle('$ACTION', ($EVENT, $TOKEN, ...) => { ... })
+          - patterns:
+              - pattern: |
+                  ipcMain.on('$ACTION', ...)
+              - metavariable-regex:
+                  metavariable: $ACTION
+                  regex: '(post|delete|put|patch)'
+                  case-insensitive: true
+              - pattern-not: |
+                  ipcMain.on('$ACTION', ($EVENT, $TOKEN, ...) => { ... })
+    message: >
+      IPC handlers for state-changing operations should validate a CSRF token.
+      Add a token parameter and verify it matches a stored nonce before processing.
+    languages: [javascript, typescript]
+    severity: MEDIUM
+    metadata:
+      category: security
+      cwe: CWE-352
+      references:
+        - https://owasp.org/www-community/attacks/csrf
+
+  # Security: Insecure Crypto - MD5/SHA1 for passwords
+  - id: insecure-crypto-password
+    patterns:
+      - pattern-either:
+          - pattern: |
+              crypto.createHash('md5')
+          - pattern: |
+              crypto.createHash('sha1')
+          - pattern: |
+              crypto.createHash('sha256')
+    message: >
+      MD5 and SHA1 are cryptographically broken. For passwords, use bcrypt, scrypt, or
+      Argon2. For general hashing, use SHA-256 with HMAC and a salt. Never use unsalted hashes.
+    languages: [javascript, typescript]
+    severity: HIGH
+    metadata:
+      category: security
+      cwe: CWE-327
+      references:
+        - https://owasp.org/www-community/vulnerabilities/Insecure_Hashing
+
+  # Security: Electron insecure preload
+  - id: electron-nodeintegration-true
+    patterns:
+      - pattern-either:
+          - pattern: |
+              {
+                webPreferences: {
+                  nodeIntegration: true,
+                  ...
+                }
+              }
+          - pattern: |
+              webPreferences.nodeIntegration = true
+    message: >
+      nodeIntegration: true is a critical security risk. Electron docs strongly recommend
+      disabling it. Use preload scripts instead for IPC communication. Set nodeIntegration: false.
+    languages: [javascript, typescript]
+    severity: CRITICAL
+    metadata:
+      category: security
+      cwe: CWE-95
+      references:
+        - https://www.electronjs.org/docs/tutorial/security#2-do-not-enable-node-integration-for-remote-content
+
+  # Security: Electron context isolation disabled
+  - id: electron-contextisolation-false
+    patterns:
+      - pattern-either:
+          - pattern: |
+              {
+                webPreferences: {
+                  contextIsolation: false,
+                  ...
+                }
+              }
+          - pattern: |
+              webPreferences.contextIsolation = false
+    message: >
+      contextIsolation: false exposes the preload script directly to renderer. Always enable
+      contextIsolation: true and use contextBridge to expose safe APIs only.
+    languages: [javascript, typescript]
+    severity: CRITICAL
+    metadata:
+      category: security
+      cwe: CWE-95
+      references:
+        - https://www.electronjs.org/docs/tutorial/context-isolation
+
+  # Security: Electron enableRemoteModule
+  - id: electron-enableremotemodule
+    patterns:
+      - pattern-either:
+          - pattern: |
+              {
+                webPreferences: {
+                  enableRemoteModule: true,
+                  ...
+                }
+              }
+          - pattern: |
+              webPreferences.enableRemoteModule = true
+    message: >
+      enableRemoteModule: true is deprecated and insecure. Use IPC (ipcMain/ipcRenderer)
+      instead for main process communication.
+    languages: [javascript, typescript]
+    severity: CRITICAL
+    metadata:
+      category: security
+      references:
+        - https://www.electronjs.org/docs/tutorial/security#5-do-not-use-enableremotemodule
+
+  # Security: XSS via dangerouslySetInnerHTML
+  - id: xss-dangerous-innerhtml
+    patterns:
+      - pattern: |
+          dangerouslySetInnerHTML={{ __html: $DATA }}
+      - pattern-not: |
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml($DATA) }}
+      - pattern-not: |
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize($DATA) }}
+    message: >
+      dangerouslySetInnerHTML without sanitization is an XSS vector. Use DOMPurify or
+      sanitize-html to sanitize user-controlled data before inserting. Example:
+      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(userHTML) }}
+    languages: [javascript, typescript, jsx, tsx]
+    severity: CRITICAL
+    metadata:
+      category: security
+      cwe: CWE-79
+      owasp: A03:2021 Injection (XSS)
+      references:
+        - https://owasp.org/www-community/attacks/xss/
+
+  # Security: Shell.openExternal without validation
+  - id: electron-shell-openexternal-unsafe
+    patterns:
+      - pattern: |
+          shell.openExternal($URL)
+      - pattern-not: |
+          shell.openExternal(validateURL($URL))
+      - pattern-not: |
+          shell.openExternal(new URL($URL).href)
+    message: >
+      shell.openExternal() can open arbitrary URLs if not validated. Validate that URLs
+      use safe protocols (http, https) and match expected hosts. Use new URL() to parse
+      and validate, or check against a whitelist.
+    languages: [javascript, typescript]
+    severity: HIGH
+    metadata:
+      category: security
+      references:
+        - https://www.electronjs.org/docs/api/shell#shellopenexternalurl-options
+
+  # Security: Insecure webPreferences
+  - id: electron-insecure-webpreferences
+    patterns:
+      - pattern-either:
+          - pattern: |
+              {
+                webPreferences: {
+                  sandbox: false,
+                  ...
+                }
+              }
+          - pattern: |
+              webPreferences.sandbox = false
+    message: >
+      sandbox: false disables Chromium's sandbox and is a severe security risk.
+      Keep sandbox: true (default) to limit renderer process privileges.
+    languages: [javascript, typescript]
+    severity: CRITICAL
+    metadata:
+      category: security
+      references:
+        - https://www.electronjs.org/docs/tutorial/security#3-enable-context-isolation-for-remote-content
+
+  # ============================================================================
+  # ANTI-PATTERN RULES (from CLAUDE.md Landmines)
+  # ============================================================================
+
+  # Anti-Pattern: execSync on hot paths (Landmine #2)
+  - id: execsync-hot-path
+    patterns:
+      - pattern-either:
+          - pattern: execSync(...)
+          - pattern: execFileSync(...)
+          - pattern: spawnSync(...)
+    message: >
+      execSync blocks the Node event loop and should never be used in hot paths or API handlers.
+      Use async exec() or spawn() with callbacks instead. This blocks all other operations until
+      the command completes.
+    languages: [javascript, typescript]
+    severity: HIGH
+    metadata:
+      category: anti-pattern
+      references:
+        - file:///sessions/happy-tender-turing/mnt/claw-architect/CLAUDE.md
+
+  # Anti-Pattern: const inside try block (Landmine #3)
+  - id: const-in-try-block
+    patterns:
+      - pattern: |
+          try {
+            const $VAR = ...;
+          } catch (...) {
+            ... $VAR ...
+          }
+    message: >
+      Variables declared with const inside try blocks are scoped to that block and cannot be
+      accessed in catch. Declare with let before the try block. This causes "undefined" errors.
+    languages: [javascript, typescript]
+    severity: MEDIUM
+    metadata:
+      category: anti-pattern
+      references:
+        - file:///sessions/happy-tender-turing/mnt/claw-architect/CLAUDE.md
+
+  # Anti-Pattern: File descriptor leaks with fs.openSync (Landmine #5)
+  - id: fd-leak-opensync
+    patterns:
+      - pattern-either:
+          - pattern: |
+              const $FD = fs.openSync(...)
+              ... spawn(..., { ... })
+          - pattern: |
+              fs.openSync(...)
+              spawn(...)
+    message: >
+      fs.openSync() without corresponding closeSync() in parent before spawn() leaks file
+      descriptors. Child process inherits them; parent doesn't close. Under load, hits OS
+      fd limit. Always closeSync() or use fs.promises.open() with async/await.
+    languages: [javascript, typescript]
+    severity: MEDIUM
+    metadata:
+      category: anti-pattern
+      references:
+        - file:///sessions/happy-tender-turing/mnt/claw-architect/CLAUDE.md
+
+  # Anti-Pattern: Hardcoded action IDs (Landmine #6)
+  - id: hardcoded-action-ids
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $ACTION_ID = "research-copy"
+          - pattern: |
+              const $VAR = "..."
+              if ($VAR === "research-copy") ...
+    message: >
+      Hardcoded action IDs in handlers cause mismatches when renamed. Always reference
+      DASHBOARD_ACTIONS by ID constant or config, never inline strings.
+    languages: [javascript, typescript]
+    severity: MEDIUM
+    metadata:
+      category: anti-pattern
+      references:
+        - file:///sessions/happy-tender-turing/mnt/claw-architect/CLAUDE.md
+
+  # Anti-Pattern: Duplicate constants (Landmine #7)
+  - id: duplicate-constants
+    patterns:
+      - pattern: |
+          const $VAR = $VALUE;
+          ...
+          const $VAR = $VALUE;
+    message: >
+      Constants defined twice at module level cause update inconsistencies when one is changed
+      but not the other. Use module-level constants only; reference them from both locations.
+    languages: [javascript, typescript]
+    severity: MEDIUM
+    metadata:
+      category: anti-pattern
+      references:
+        - file:///sessions/happy-tender-turing/mnt/claw-architect/CLAUDE.md
+
+  # Anti-Pattern: Read-modify-write on JSON files (Landmine #1)
+  - id: json-rw-race-condition
+    patterns:
+      - pattern-either:
+          - pattern: |
+              const data = JSON.parse(fs.readFileSync($FILE, 'utf8'));
+              ...
+              fs.writeFileSync($FILE, JSON.stringify(data));
+          - pattern: |
+              fs.readFileSync($FILE)
+              ...
+              fs.writeFileSync($FILE, ...)
+    message: >
+      Reading, modifying, and writing JSON files has TOCTOU race conditions in concurrent code.
+      Use PostgreSQL or atomic writes. If you must use files, use fs.lock or similar. Never
+      do this from concurrent agents/handlers.
+    languages: [javascript, typescript]
+    severity: HIGH
+    metadata:
+      category: anti-pattern
+      references:
+        - file:///sessions/happy-tender-turing/mnt/claw-architect/CLAUDE.md
+
+  # Anti-Pattern: console.log in production code
+  - id: console-log-production
+    patterns:
+      - pattern-either:
+          - pattern: console.log(...)
+          - pattern: console.info(...)
+          - pattern: console.debug(...)
+    message: >
+      console.log() is for debugging only. Use a logger library (winston, pino, or similar)
+      for production code. This ensures logs go to the right place and can be filtered by level.
+    languages: [javascript, typescript]
+    severity: MEDIUM
+    metadata:
+      category: anti-pattern
+      fix-pattern: |
+        logger.log(...)
+
+  # ============================================================================
+  # CODE QUALITY RULES
+  # ============================================================================
+
+  # Quality: Unhandled promise rejections
+  - id: unhandled-promise-rejection
+    patterns:
+      - pattern-either:
+          - pattern: |
+              new Promise(...)
+          - pattern: |
+              Promise.all(...)
+          - pattern: |
+              Promise.race(...)
+      - pattern-not: |
+              new Promise(...)
+                .catch(...)
+      - pattern-not: |
+              Promise.all(...)
+                .catch(...)
+      - pattern-not: |
+              try { await $VAR } catch (...) { }
+    message: >
+      Promise without catch handler or try/catch can cause unhandled rejection. Always handle
+      errors: .catch(err => {...}) or wrap in try/catch when awaiting.
+    languages: [javascript, typescript]
+    severity: MEDIUM
+    metadata:
+      category: quality
+
+  # Quality: Empty catch blocks
+  - id: empty-catch-block
+    pattern: |
+        catch (...) {
+        }
+    message: >
+      Empty catch blocks silently swallow errors. Add at least a logger.error() call or
+      rethrow. Empty catches hide bugs.
+    languages: [javascript, typescript]
+    severity: MEDIUM
+    metadata:
+      category: quality
+
+  # Quality: Any type assertions
+  - id: type-assertion-any
+    patterns:
+      - pattern-either:
+          - pattern: $VAR as any
+          - pattern: <any>$VAR
+    message: >
+      Using 'as any' disables TypeScript type checking. Instead, define the proper type
+      or use a generic. This hides bugs.
+    languages: [typescript, tsx]
+    severity: MEDIUM
+    metadata:
+      category: quality
+
+  # Quality: Missing null/undefined check before property access
+  - id: missing-null-check
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $OBJ.property
+              ...
+              if ($OBJ) ...
+          - pattern: |
+              $OBJ.$PROP
+              ...
+              if ($OBJ == null) ...
+    message: >
+      Potential null/undefined reference. Check that $OBJ is defined before accessing properties.
+      Add: if ($OBJ == null) { ... } or use optional chaining: $OBJ?.property
+    languages: [javascript, typescript]
+    severity: MEDIUM
+    metadata:
+      category: quality
+
+  # ============================================================================
+  # ELECTRON-SPECIFIC RULES
+  # ============================================================================
+
+  # Electron: IPC without validation
+  - id: electron-ipc-no-validation
+    patterns:
+      - pattern-either:
+          - pattern: |
+              ipcMain.handle('$EVENT', ($EVENT, $DATA) => {
+                ... $DATA ...
+              })
+          - pattern: |
+              ipcMain.on('$EVENT', ($EVENT, $DATA) => {
+                ... $DATA ...
+              })
+      - pattern-not: |
+              ipcMain.handle('$EVENT', ($EVENT, $DATA) => {
+                if (!$DATA || typeof $DATA !== '...')  { ... }
+                ... $DATA ...
+              })
+    message: >
+      IPC data from renderer is untrusted. Always validate and sanitize before use.
+      Check type, range, and format. Example:
+      if (!data || typeof data.userId !== 'number') { throw new Error(...); }
+    languages: [javascript, typescript]
+    severity: MEDIUM
+    metadata:
+      category: security
+      cwe: CWE-20
+      references:
+        - https://www.electronjs.org/docs/tutorial/security#1-only-load-secure-content
+
+  # Electron: insecure preload with eval
+  - id: electron-preload-eval
+    patterns:
+      - pattern: |
+          eval(...)
+      - pattern-not: |
+          // preload.ts or preload.js
+    message: >
+      eval() in preload scripts is extremely dangerous. Use contextBridge to expose safe
+      APIs only. Preload should be minimal and not evaluate user data.
+    languages: [javascript, typescript]
+    severity: CRITICAL
+    metadata:
+      category: security
+      references:
+        - https://www.electronjs.org/docs/tutorial/context-isolation
