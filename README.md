@@ -10,7 +10,7 @@ It combines GitHub + Reddit research signals, benchmark scoring, and strict qual
 - rollout/rollback and test plans
 - deterministic proof data (`planHash`, `qualityScore`, `timeToFirstWowMs`)
 
-[![CI](https://github.com/smanthey/InayanBuilderBot/actions/workflows/ci.yml/badge.svg)](https://github.com/smanthey/InayanBuilderBot/actions/workflows/ci.yml)
+[![CI](https://github.com/jamonwidit/InayanBuilderBot/actions/workflows/ci.yml/badge.svg)](https://github.com/jamonwidit/InayanBuilderBot/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
 
 ## Why This Exists
@@ -112,7 +112,7 @@ Real-system execution mode (`/api/v1/masterpiece/pipeline/run` with `runExternal
 ## First Run (Under 2 Minutes)
 
 ```bash
-git clone https://github.com/smanthey/InayanBuilderBot.git
+git clone https://github.com/jamonwidit/InayanBuilderBot.git
 cd InayanBuilderBot
 npm ci
 npm run setup:auto

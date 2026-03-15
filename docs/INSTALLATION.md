@@ -10,7 +10,7 @@ InayanBuilderBot is designed to be simple to install, cheap to run, and reliable
 ## Fast Local Setup
 
 ```bash
-git clone https://github.com/smanthey/InayanBuilderBot.git
+git clone https://github.com/jamonwidit/InayanBuilderBot.git
 cd InayanBuilderBot
 npm ci
 npm run setup:auto

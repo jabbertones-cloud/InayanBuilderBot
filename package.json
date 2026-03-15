@@ -15,11 +15,11 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/smanthey/InayanBuilderBot.git"
+    "url": "git+https://github.com/jamonwidit/InayanBuilderBot.git"
   },
-  "homepage": "https://github.com/smanthey/InayanBuilderBot#readme",
+  "homepage": "https://github.com/jamonwidit/InayanBuilderBot#readme",
   "bugs": {
-    "url": "https://github.com/smanthey/InayanBuilderBot/issues"
+    "url": "https://github.com/jamonwidit/InayanBuilderBot/issues"
   },
   "type": "module",
   "engines": {
@@ -34,7 +34,7 @@
     "dev": "NODE_ENV=development node --watch src/index.js",
     "dev:auto": "npm run setup:auto && NODE_ENV=development node --watch src/index.js",
     "test": "node --test",
-    "test:e2e": "playwright test",
+    "test:e2e": "npx playwright test",
     "test:e2e:headed": "playwright test --headed",
     "lint": "node --check src/index.js && node --check scripts/security-check.mjs",
     "security:check": "node scripts/security-check.mjs",
@@ -42,10 +42,15 @@
     "mcp:health": "node scripts/mcp-health-check.js",
     "claw:baseline:gate": "node scripts/claw-baseline-gate.js",
     "claw:security:gate": "node scripts/claw-security-gate.js",
-    "check": "npm run -s lint"
+    "check": "npm run -s lint",
+    "qa": "node qa/super-qa-runner.mjs",
+    "qa:fast": "node qa/super-qa-runner.mjs --fast",
+    "qa:ci": "node qa/super-qa-runner.mjs --ci --json",
+    "qa:layer": "node qa/super-qa-runner.mjs --layer"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
+    "pino": "^9.5.0",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.1",
     "helmet": "^8.0.0",
