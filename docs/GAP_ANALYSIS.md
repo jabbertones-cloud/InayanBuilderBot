@@ -1,5 +1,24 @@
 # Gap Analysis
+<!-- AUTO-GENERATED:START -->
+Generated from claw-architect on 2026-03-20T20:29:32.216Z for InayanBuilderBot.
 
+## Coordination with OpenClaw Mission Control (claw-architect)
+
+- Benchmark lookup: `../../claw-architect/reports/repo-completion-benchmark-lookup-latest.md`
+- Research agenda: `../../claw-architect/reports/builder-research-agenda-latest.md`
+
+## Latest run summary (2026-03-20T20:29:32.216Z)
+
+- Capability score: 91
+
+### Issues
+
+- No open issues from the latest builder agenda.
+
+### Next actions
+
+- No queued next actions from the latest builder agenda.
+<!-- AUTO-GENERATED:END -->
 Date: 2026-03-04
 
 ## Coordination with OpenClaw Mission Control (claw-architect)

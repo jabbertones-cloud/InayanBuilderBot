@@ -51,6 +51,7 @@ function main() {
     run("filesystem", "bash", ["-lc", "./scripts/mcp-filesystem.sh --healthcheck"]),
     run("github", "bash", ["-lc", "./scripts/mcp-github.sh --healthcheck"]),
     run("context7", "bash", ["-lc", "./scripts/mcp-context7.sh --healthcheck"]),
+    run("reddit", "bash", ["-lc", "./scripts/mcp-reddit.sh --healthcheck"]),
     run("github_server_boot", "bash", ["-lc", "npx -y @modelcontextprotocol/server-github"], {
       timeoutMs: 3500,
       allowTimeout: true,

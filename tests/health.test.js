@@ -3,9 +3,16 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+
+// Set a known API key before importing (module-level code auto-generates one otherwise)
+const TEST_API_KEY = "test-builder-key-for-ci";
+process.env.BUILDERBOT_API_KEY = TEST_API_KEY;
+
 import { createApp } from "../src/index.js";
 
 const FETCH_TIMEOUT_MS = 20000;
+const AUTH_HEADERS = { Authorization: `Bearer ${TEST_API_KEY}` };
+
 function fetchWithTimeout(url, options = {}) {
   const ac = new AbortController();
   const to = setTimeout(() => ac.abort(), options.timeout ?? FETCH_TIMEOUT_MS);
@@ -45,7 +52,8 @@ test("providers endpoint exposes configured flags without secrets", async () => 
 
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : 0;
-  const response = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/chat/providers`);
+  const response = await 
+fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/chat/providers`, { headers: AUTH_HEADERS });
   const body = await response.json();
 
   assert.equal(response.status, 200);
@@ -68,7 +76,7 @@ test("indexing capabilities endpoint reports builtin support", async () => {
 
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : 0;
-  const response = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/indexing/capabilities`);
+  const response = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/indexing/capabilities`, { headers: AUTH_HEADERS });
   const body = await response.json();
 
   assert.equal(response.status, 200);
@@ -110,7 +118,7 @@ test("pipeline run works with seed repos and runExternal=false", async () => {
 
   const response = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
     body: JSON.stringify({
       productName: "Inaya Test Product",
       userGoal: "Build robust dashboard and chat product with benchmark-first architecture.",
@@ -170,7 +178,7 @@ test("pipeline run includes builtin advanced indexing when enabled", async () =>
 
   const response = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
     body: JSON.stringify({
       productName: "Inaya Index Product",
       userGoal: "Use builtin advanced indexing pipeline integration.",
@@ -227,7 +235,7 @@ test("pipeline benchmark prioritizes webhook signature break-pattern evidence", 
 
   const response = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
     body: JSON.stringify({
       productName: "Webhook Pattern Prioritization",
       userGoal: "Prioritize repos with proven webhook signature and idempotency patterns.",
@@ -285,7 +293,7 @@ test("pipeline run reuses scout and benchmark cache on repeated input", async ()
 
   const response1 = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
     body: JSON.stringify(payload),
   });
   const body1 = await response1.json();
@@ -299,7 +307,7 @@ test("pipeline run reuses scout and benchmark cache on repeated input", async ()
 
   const response2 = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
     body: JSON.stringify(payload),
   });
   const body2 = await response2.json();
@@ -324,7 +332,8 @@ test("magic run includes Playwright-oriented E2E execution tasks", async () => {
 
   const response = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/masterpiece/magic-run`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
+    timeout: 30000,
     body: JSON.stringify({
       productName: "E2E Coverage Validation",
       userGoal: "Ensure execution plan includes Playwright tasks",
@@ -353,7 +362,8 @@ test("magic run includes Playwright-oriented E2E execution tasks", async () => {
 });
 
 test("repo contract gap endpoint detects missing backend routes and alias mismatches", async () => {
-  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "inayan-contract-gap-"));
+  // Use a subdir of cwd so it passes the path traversal check (allowed bases include cwd)
+  const tmpRoot = fs.mkdtempSync(path.join(process.cwd(), ".tmp-contract-gap-"));
   const webDir = path.join(tmpRoot, "client");
   const apiDir = path.join(tmpRoot, "server");
   fs.mkdirSync(webDir, { recursive: true });
@@ -385,7 +395,7 @@ test("repo contract gap endpoint detects missing backend routes and alias mismat
 
   const response = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/repos/contract-gap`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
     body: JSON.stringify({ repoPath: tmpRoot }),
   });
   const body = await response.json();
@@ -397,7 +407,7 @@ test("repo contract gap endpoint detects missing backend routes and alias mismat
   assert.equal(Array.isArray(body.report?.probableAliasMatches), true);
 
   server.close();
-  fs.rmSync(tmpRoot, { recursive: true, force: true });
+  try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch {}
 });
 
 test("reddit search endpoint returns ranked results", async () => {
@@ -424,7 +434,7 @@ test("reddit search endpoint returns ranked results", async () => {
             ],
           },
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { "Content-Type": "application/json", ...AUTH_HEADERS } }
       );
     }
     return originalFetch(url, options);
@@ -438,7 +448,7 @@ test("reddit search endpoint returns ranked results", async () => {
     const port = typeof address === "object" && address ? address.port : 0;
     const response = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/reddit/search`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
       body: JSON.stringify({
         query: "dashboard chat ui",
         subreddits: ["AI_Agents"],
@@ -486,7 +496,7 @@ test("pipeline includes reddit_research stage", async () => {
             ],
           },
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { "Content-Type": "application/json", ...AUTH_HEADERS } }
       );
     }
     return originalFetch(url, options);
@@ -514,7 +524,7 @@ test("pipeline includes reddit_research stage", async () => {
 
     const response = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
       body: JSON.stringify({
         productName: "Inaya Reddit Pipeline Product",
         userGoal: "Build benchmark-first dashboard chat system with external signal validation.",
@@ -562,7 +572,7 @@ test("github research endpoint returns repo and answer intelligence", async () =
             },
           ],
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { "Content-Type": "application/json", ...AUTH_HEADERS } }
       );
     }
     if (target.includes("/search/issues")) {
@@ -580,7 +590,7 @@ test("github research endpoint returns repo and answer intelligence", async () =
             },
           ],
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { "Content-Type": "application/json", ...AUTH_HEADERS } }
       );
     }
     return originalFetch(url, options);
@@ -594,7 +604,7 @@ test("github research endpoint returns repo and answer intelligence", async () =
     const port = typeof address === "object" && address ? address.port : 0;
     const response = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/github/research`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
       body: JSON.stringify({
         query: "dashboard chat ui",
         perPage: 10,
@@ -632,13 +642,13 @@ test("github research endpoint returns partial results when issue search fails",
             },
           ],
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { "Content-Type": "application/json", ...AUTH_HEADERS } }
       );
     }
     if (target.includes("/search/issues")) {
       return new Response(JSON.stringify({ message: "rate limit" }), {
         status: 403,
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
       });
     }
     return originalFetch(url, options);
@@ -652,7 +662,7 @@ test("github research endpoint returns partial results when issue search fails",
     const port = typeof address === "object" && address ? address.port : 0;
     const response = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/github/research`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
       body: JSON.stringify({
         query: "dashboard chat",
         perPage: 10,
@@ -692,7 +702,7 @@ test("pipeline includes github_research stage", async () => {
             },
           ],
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { "Content-Type": "application/json", ...AUTH_HEADERS } }
       );
     }
     if (target.includes("/search/issues")) {
@@ -710,7 +720,7 @@ test("pipeline includes github_research stage", async () => {
             },
           ],
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { "Content-Type": "application/json", ...AUTH_HEADERS } }
       );
     }
     return originalFetch(url, options);
@@ -724,7 +734,7 @@ test("pipeline includes github_research stage", async () => {
     const port = typeof address === "object" && address ? address.port : 0;
     const response = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
       body: JSON.stringify({
         productName: "Inaya Github Pipeline Product",
         userGoal: "Build dashboard chat from proven community code.",
@@ -775,7 +785,7 @@ test("chat endpoint returns 503 when no model keys configured", async () => {
 
   const response = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/chat/reply`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
     body: JSON.stringify({
       message: "Give me architecture guidance",
       provider: "auto",
@@ -811,7 +821,7 @@ test("chat endpoint accepts claude/google provider aliases", async () => {
 
   const claudeResponse = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/chat/reply`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
     body: JSON.stringify({
       message: "Use claude alias",
       provider: "claude",
@@ -822,7 +832,7 @@ test("chat endpoint accepts claude/google provider aliases", async () => {
 
   const googleResponse = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/chat/reply`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
     body: JSON.stringify({
       message: "Use google alias",
       provider: "google",
@@ -874,7 +884,7 @@ test("chat reply injects weighted validated reddit evidence into model context",
             ],
           },
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { "Content-Type": "application/json", ...AUTH_HEADERS } }
       );
     }
     if (target.includes("api.openai.com/v1/chat/completions")) {
@@ -883,7 +893,7 @@ test("chat reply injects weighted validated reddit evidence into model context",
         JSON.stringify({
           choices: [{ message: { content: "reddit-weighted-reply" } }],
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { "Content-Type": "application/json", ...AUTH_HEADERS } }
       );
     }
     return originalFetch(url, options);
@@ -899,7 +909,7 @@ test("chat reply injects weighted validated reddit evidence into model context",
 
     const pipelineResponse = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
       body: JSON.stringify({
         productName: "Inaya Reddit Weighting",
         userGoal: "Build robust dashboard chat tooling with benchmark evidence and community validation.",
@@ -930,7 +940,7 @@ test("chat reply injects weighted validated reddit evidence into model context",
 
     const chatResponse = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/chat/reply`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
       body: JSON.stringify({
         message: "How should we prioritize build choices?",
         provider: "openai",
@@ -969,7 +979,7 @@ test("sqlite index endpoints return stats and searchable results", { skip: !proc
     const address = server.address();
     const port = typeof address === "object" && address ? address.port : 0;
 
-    const statsRes = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/index/stats`);
+    const statsRes = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/index/stats`, { headers: AUTH_HEADERS });
     const statsBody = await statsRes.json();
     if (statsRes.status === 503) {
       return; // Index not available in this env (e.g. builtin not loaded)
@@ -979,7 +989,7 @@ test("sqlite index endpoints return stats and searchable results", { skip: !proc
     assert.equal(typeof statsBody.stats.counts.repos, "number");
     assert.equal(statsBody.stats.counts.repos > 0, true);
 
-    const searchRes = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/index/search?q=dashboard&limit=5`);
+    const searchRes = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/index/search?q=dashboard&limit=5`, { headers: AUTH_HEADERS });
     const searchBody = await searchRes.json();
     assert.equal(searchRes.status, 200);
     assert.equal(searchBody.ok, true);
@@ -987,7 +997,7 @@ test("sqlite index endpoints return stats and searchable results", { skip: !proc
 
     const refreshRes = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/index/refresh`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
       body: JSON.stringify({ source: "builtin" }),
     });
     const refreshBody = await refreshRes.json();
@@ -1019,7 +1029,7 @@ test("pipeline run persists benchmark snapshots into sqlite index", { skip: !pro
 
     const runRes = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/masterpiece/pipeline/run`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
       body: JSON.stringify({
         productName: "SQLite Snapshot Product",
         userGoal: "Persist benchmark and fusion snapshots in sqlite index",
@@ -1048,7 +1058,7 @@ test("pipeline run persists benchmark snapshots into sqlite index", { skip: !pro
     assert.equal(runRes.status, 200);
     assert.equal(runBody.ok, true);
 
-    const statsRes = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/index/stats`);
+    const statsRes = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/index/stats`, { headers: AUTH_HEADERS });
     const statsBody = await statsRes.json();
     if (statsRes.status === 503) return;
     assert.equal(statsRes.status, 200);
@@ -1101,7 +1111,7 @@ test("video bootstrap endpoint builds transcript-grounded advanced plan", async 
     const port = typeof address === "object" && address ? address.port : 0;
     const response = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/content/video-bootstrap`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
       body: JSON.stringify({
         videoId: "2UxulrochNI",
         dailyVideos: 5,
@@ -1135,7 +1145,7 @@ test("video bootstrap endpoint returns 404 when transcript index is missing", as
     const port = typeof address === "object" && address ? address.port : 0;
     const response = await fetchWithTimeout(`http://127.0.0.1:${port}/api/v1/content/video-bootstrap`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
       body: JSON.stringify({ videoId: "2UxulrochNI" }),
     });
     const body = await response.json();

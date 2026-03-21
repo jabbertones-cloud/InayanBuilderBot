@@ -27,8 +27,10 @@ InayanBuilderBot is the **builder product** in the Index + Inayan Builder Loop. 
 
 ### How claw-architect calls InayanBuilderBot
 
-- **Reddit research:** `npm run reddit:search` in claw-architect uses its own script; for InayanBuilderBot-backed research, POST to `http://<host>:3030/api/v1/reddit/search` (or use builder-research-agenda outputs as input).
-- **Builder gap pulse:** Does not automatically call InayanBuilderBot; it queues repo_autofix and opencode_controller for repos with gaps. InayanBuilderBot is a priority repo and is benchmarked via `repo:completion:gap --repo InayanBuilderBot`.
+- **Canonical operator lane:** `npm run inayan:full-cycle -- --until-repo InayanBuilderBot --max-iterations 1` from claw-architect. This is the entrypoint for indexing, gap analysis, benchmark lookup, research agenda, feature benchmark, queueing, and doc sync.
+- **Reddit research:** `builder-gap-pulse` calls `POST /api/v1/reddit/search` when InayanBuilderBot is reachable and a repo still has research targets from the builder agenda.
+- **GitHub research:** `builder-gap-pulse` calls `POST /api/v1/github/research` with agenda- and benchmark-derived queries when a repo still has gaps.
+- **Builder gap pulse:** `npm run builder:gap:pulse -- --repos InayanBuilderBot` now does more than queue workers. It runs gap analysis support scripts, optional InayanBuilderBot research, writes research artifacts under claw-architect `reports/inayan-builder-loop/`, then queues `repo_autofix` and `opencode_controller`.
 
 ## Pipeline: Video → index → brief → research → benchmark → InayanBuilderBot
 
@@ -37,9 +39,9 @@ Repeatable pipeline used to drive InayanBuilderBot from tutorial videos and rese
 1. **Video URLs** → Add to `claw-architect/data/youtube-urls.txt`.
 2. **YouTube index** → `npm run youtube:index:auto` (in claw-architect); produces `reports/youtube-transcript-visual-index-latest.json`.
 3. **Brief** → `npm run youtube:index:to-brief` (in claw-architect); produces `docs/INAYAN-BUILDER-VIDEO-SPEC.md`.
-4. **Research** → `npm run reddit:search` and `npm run builder:research:agenda -- --rolling` (in claw-architect).
-5. **Benchmark** → `npm run repo:completion:gap -- --repo InayanBuilderBot` (in claw-architect).
-6. **Update** → Apply improvements to InayanBuilderBot (this repo); run full cycle until no gaps: `npm run inayan:full-cycle -- --until-repo InayanBuilderBot` (in claw-architect).
+4. **Research** → `npm run builder:research:agenda -- --repo InayanBuilderBot` or let `builder-gap-pulse` invoke it automatically as part of `npm run inayan:full-cycle`.
+5. **Benchmark** → `npm run repo:completion:gap -- --repo InayanBuilderBot`, `npm run repo:benchmark:lookup -- --repo InayanBuilderBot`, and `npm run oss:benchmark:by-features -- --repo InayanBuilderBot` (all in claw-architect, or implicitly through the canonical full cycle).
+6. **Update** → Run the canonical loop until no gaps remain: `npm run inayan:full-cycle -- --until-repo InayanBuilderBot`. This drives the pulse, research, queueing, and doc sync automatically.
 
 ## Automated content creator (video → content)
 
@@ -50,7 +52,7 @@ To use InayanBuilderBot **and** claw-architect together as an **automated conten
    This runs: YouTube index (transcript + metadata) → brief → Reddit search → builder research agenda. Outputs: `docs/INAYAN-BUILDER-VIDEO-SPEC.md`, Reddit and research agenda reports.
 
 2. **Research APIs (this repo):**  
-   Call `POST /api/v1/reddit/search` and `POST /api/v1/research/fusion` for more research. Use `POST /api/v1/masterpiece/magic-run` for blueprints and execution tasks.
+   Call `POST /api/v1/reddit/search`, `POST /api/v1/github/research`, and `POST /api/v1/research/fusion` for more research. Use `POST /api/v1/masterpiece/magic-run` for blueprints and execution tasks.
 
 3. **Content generation (claw-architect):**  
    Use the brief and research to drive copy/script generation: submit a goal to Mission Control (`POST /api/goal`) or queue `aicreator` / `copy_lab_run` with a goal derived from the brief. See claw-architect `docs/CONTENT-CREATOR.md`.

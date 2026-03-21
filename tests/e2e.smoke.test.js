@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+
+// Set a known API key before importing (module-level code auto-generates one otherwise)
+const TEST_API_KEY = "test-builder-key-for-ci";
+process.env.BUILDERBOT_API_KEY = TEST_API_KEY;
+
 import { createApp } from "../src/index.js";
+
+const AUTH_HEADERS = { Authorization: `Bearer ${TEST_API_KEY}` };
 
 test("e2e smoke: dashboard loads and chat UI reaches model-backed API", async () => {
   const originalFetch = global.fetch;
@@ -22,7 +29,7 @@ test("e2e smoke: dashboard loads and chat UI reaches model-backed API", async ()
         }),
         {
           status: 200,
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
         }
       );
     }
@@ -44,7 +51,7 @@ test("e2e smoke: dashboard loads and chat UI reaches model-backed API", async ()
 
     const chatResponse = await originalFetch(`http://127.0.0.1:${port}/api/v1/chat/reply`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...AUTH_HEADERS },
       body: JSON.stringify({
         message: "smoke test message",
         provider: "openai",
@@ -58,7 +65,8 @@ test("e2e smoke: dashboard loads and chat UI reaches model-backed API", async ()
     assert.equal(String(chatBody.reply).includes("mock-streamless-openai-reply"), true);
 
     const sessionResponse = await originalFetch(
-      `http://127.0.0.1:${port}/api/v1/chat/sessions/${encodeURIComponent(chatBody.sessionId)}`
+      `http://127.0.0.1:${port}/api/v1/chat/sessions/${encodeURIComponent(chatBody.sessionId)}`,
+      { headers: AUTH_HEADERS }
     );
     const sessionBody = await sessionResponse.json();
     assert.equal(sessionResponse.status, 200);
@@ -66,7 +74,7 @@ test("e2e smoke: dashboard loads and chat UI reaches model-backed API", async ()
     assert.equal(Array.isArray(sessionBody.session.messages), true);
     assert.equal(sessionBody.session.messages.length >= 2, true);
 
-    const providersResponse = await originalFetch(`http://127.0.0.1:${port}/api/v1/chat/providers`);
+    const providersResponse = await originalFetch(`http://127.0.0.1:${port}/api/v1/chat/providers`, { headers: AUTH_HEADERS });
     const providersBody = await providersResponse.json();
     assert.equal(providersResponse.status, 200);
     assert.equal(providersBody.ok, true);

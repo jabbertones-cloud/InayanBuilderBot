@@ -9,6 +9,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { createSqliteIndexStore } from "./sqlite-index-store.js";
+import { registerEcosystemRoutes } from "./ecosystem-routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,6 +20,30 @@ const runsFile = path.join(dataDir, "runs.json");
 const builtinRepoIndexFile = path.join(rootDir, "data", "builtin-repo-index.json");
 const envFile = path.join(rootDir, ".env");
 const envExampleFile = path.join(rootDir, ".env.example");
+
+function loadEnvIntoProcessEnv(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/g)) {
+    if (!line || line.trim().startsWith("#")) continue;
+    const idx = line.indexOf("=");
+    if (idx <= 0) continue;
+    const key = line.slice(0, idx).trim();
+    const value = line.slice(idx + 1);
+    if (!key) continue;
+    if (process.env[key] == null || process.env[key] === "") {
+      process.env[key] = value;
+    }
+  }
+}
+
+loadEnvIntoProcessEnv(envFile);
+
+// CRITICAL FIX 1: Auto-generate API key if none configured
+if (!process.env.BUILDERBOT_API_KEY) {
+  const generated = `ib_${crypto.randomBytes(24).toString('hex')}`;
+  process.env.BUILDERBOT_API_KEY = generated;
+  console.warn(`[SECURITY] No BUILDERBOT_API_KEY configured. Generated: ${generated}`);
+}
 
 const DEFAULT_PORT = Number(process.env.PORT || 3000);
 const CLAW_ARCHITECT_ROOT = process.env.CLAW_ARCHITECT_ROOT || "$HOME/claw-architect";
@@ -147,7 +172,7 @@ function persistDataStore() {
 }
 
 function nowId(prefix = "run") {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  return `${prefix}_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
 }
 
 function trimHistory() {
@@ -187,6 +212,20 @@ function trimHistory() {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// HIGH FIX 5: Fetch with timeout
+async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
 }
 
 function estimateTokenCount(text) {
@@ -962,7 +1001,7 @@ async function checkGithubToken(token) {
   const t = String(token || "").trim();
   if (!t) return { ok: false, detail: "missing_token" };
   try {
-    const res = await fetch("https://api.github.com/rate_limit", {
+    const res = await fetchWithTimeout("https://api.github.com/rate_limit", {
       headers: {
         Accept: "application/vnd.github+json",
         Authorization: `Bearer ${t}`,
@@ -1045,7 +1084,7 @@ async function githubSearch({ query, perPage, githubToken }) {
   if (githubToken) headers.Authorization = `Bearer ${githubToken}`;
 
   const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(query)}&sort=stars&order=desc&per_page=${Math.max(1, Math.min(30, perPage))}`;
-  const r = await fetch(url, { headers });
+  const r = await fetchWithTimeout(url, { headers });
   if (!r.ok) {
     const body = await r.text();
     throw new Error(`github_search_failed:${r.status}:${body.slice(0, 200)}`);
@@ -1063,7 +1102,7 @@ async function githubIssueSearch({ query, perPage, githubToken }) {
 
   const q = `${query} in:title,body is:issue -is:pr`;
   const url = `https://api.github.com/search/issues?q=${encodeURIComponent(q)}&sort=comments&order=desc&per_page=${Math.max(1, Math.min(30, perPage))}`;
-  const r = await fetch(url, { headers });
+  const r = await fetchWithTimeout(url, { headers });
   if (!r.ok) {
     const body = await r.text();
     throw new Error(`github_issue_search_failed:${r.status}:${body.slice(0, 200)}`);
@@ -2035,19 +2074,18 @@ function loadYoutubeTranscriptIndex(indexPath = DEFAULT_YOUTUBE_INDEX_PATH) {
     return {
       ok: false,
       error: "index_missing",
-      detail: `youtube transcript index not found at ${indexPath}`,
+      detail: "youtube transcript index not found",
     };
   }
   try {
     const data = JSON.parse(fs.readFileSync(indexPath, "utf8"));
     const rows = Array.isArray(data?.rows) ? data.rows : [];
-    return { ok: true, rows, summary: data?.summary || null, indexPath };
+    return { ok: true, rows, summary: data?.summary || null };
   } catch (err) {
     return {
       ok: false,
       error: "index_invalid_json",
-      detail: String(err?.message || err),
-      indexPath,
+      detail: "failed to parse youtube transcript index",
     };
   }
 }
@@ -3593,8 +3631,21 @@ export function createApp() {
     if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
     const p = parsed.data;
     const repoPath = path.resolve(String(p.repoPath || ""));
+
+    // CRITICAL FIX 4: Path traversal protection
+    try {
+      const realPath = fs.realpathSync(repoPath);
+      const allowedBases = [process.cwd(), path.resolve(process.env.REPOS_DIR || "../")];
+      const isAllowed = allowedBases.some(base => realPath.startsWith(base));
+      if (!isAllowed) {
+        return res.status(403).json({ ok: false, error: "path_not_allowed", message: "Repository path is outside allowed directories" });
+      }
+    } catch (err) {
+      return res.status(400).json({ ok: false, error: "invalid_path", message: "Cannot resolve repository path" });
+    }
+
     if (!fs.existsSync(repoPath) || !fs.statSync(repoPath).isDirectory()) {
-      return res.status(404).json({ ok: false, error: "repo_not_found", repoPath });
+      return res.status(404).json({ ok: false, error: "repo_not_found" });
     }
     const report = analyzeRepoContractGap({
       repoPath,
@@ -3862,6 +3913,9 @@ export function createApp() {
 
     return res.json({ ok: true, runId: run.id, compared: ranked.length, ranked });
   });
+
+  // Register ecosystem intelligence routes
+  registerEcosystemRoutes(app, { requireAuth, indexStore });
 
   app.post("/api/v1/masterpiece/build", requireAuth, (req, res) => {
     const parsed = MasterpieceBuildSchema.safeParse(req.body);
@@ -5375,9 +5429,26 @@ export function createApp() {
 
 export function startServer(port = DEFAULT_PORT) {
   const app = createApp();
-  return app.listen(port, () => {
+  const server = app.listen(port, () => {
     console.log(`InayanBuilderBot (Masterpiece Agent + Chat Tool) listening on http://localhost:${port}`);
   });
+
+  // HIGH FIX 6: Graceful shutdown handler
+  function gracefulShutdown(signal) {
+    console.log(`[SHUTDOWN] Received ${signal}, closing server...`);
+    server.close(() => {
+      console.log("[SHUTDOWN] Server closed gracefully");
+      process.exit(0);
+    });
+    setTimeout(() => {
+      console.error("[SHUTDOWN] Forced exit after timeout");
+      process.exit(1);
+    }, 10000);
+  }
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+  return server;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {

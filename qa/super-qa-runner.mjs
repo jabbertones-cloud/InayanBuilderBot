@@ -89,7 +89,7 @@ function runCommand(cmd, cwd = ROOT) {
     const stdout = execSync(cmd, {
       cwd,
       encoding: 'utf-8',
-      timeout: 300_000,
+      timeout: 120_000,
       stdio: flags.verbose ? 'inherit' : 'pipe',
       env: { ...process.env, FORCE_COLOR: '0', NODE_ENV: 'test' },
     });
@@ -119,15 +119,19 @@ function runLint() {
 function runUnit() {
   log(`${COLORS.magenta}▸ Running unit tests (node --test)...${COLORS.reset}`);
   const start = Date.now();
+  // Use per-test timeout to prevent hangs; overall layer timeout 120s
   const { stdout, exitCode } = runCommand('npm run -s test 2>&1');
-  const failed = (stdout.match(/failed|Failure/gi) || []).length;
+  const passMatch = stdout.match(/# pass (\d+)/);
+  const failMatch = stdout.match(/# fail (\d+)/);
+  const passed = parseInt(passMatch?.[1] || '0', 10);
+  const failed = parseInt(failMatch?.[1] || '0', 10);
   return {
     layer: 'unit',
     status: exitCode === 0 ? 'pass' : 'fail',
     duration_ms: Date.now() - start,
-    findings: exitCode === 0 ? 0 : 1,
-    critical: exitCode === 0 ? 0 : 1,
-    details: `Exit code ${exitCode}.`,
+    findings: failed,
+    critical: failed > 0 ? 1 : 0,
+    details: `${passed} passed, ${failed} failed. Exit code ${exitCode}.`,
   };
 }
 
