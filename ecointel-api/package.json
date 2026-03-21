@@ -1,0 +1,36 @@
+{
+  "name": "ecointel-api",
+  "version": "0.1.0",
+  "description": "Ecosystem Intelligence API — repo intelligence layer for agents and copilots",
+  "main": "src/api/server.js",
+  "scripts": {
+    "start": "node src/api/server.js",
+    "start:workers": "node src/workers/ingest-worker.js",
+    "start:mcp": "node src/mcp/server.js",
+    "db:migrate": "node src/db/migrate.js",
+    "seed": "node data/seed-loader.js",
+    "test": "node --test tests/",
+    "eval:offline": "python3 src/eval/offline_eval.py"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "bullmq": "^5.7.0",
+    "ioredis": "^5.3.2",
+    "pg": "^8.11.3",
+    "axios": "^1.6.7",
+    "dotenv": "^16.4.1",
+    "bcrypt": "^5.1.1",
+    "uuid": "^9.0.0",
+    "js-yaml": "^4.1.0",
+    "@qdrant/js-client-rest": "^1.8.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.22.4",
+    "stripe": "^14.18.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
