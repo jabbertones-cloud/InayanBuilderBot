@@ -1,0 +1,272 @@
+version: "1.0"
+category: ai-agent-frameworks
+description: "AI agent frameworks, orchestration systems, and multi-agent coordination libraries"
+
+weights:
+  w_meta: 0.15        # Language, stars, forks
+  w_readme: 0.25      # Documentation depth and clarity
+  w_deps: 0.25        # Shared dependencies (npm, pip, go)
+  w_struct: 0.10      # Code structure, architecture
+  w_feat: 0.25        # Feature completeness
+
+features:
+  - id: async_job_queue
+    label: "Async Job Queue"
+    description: "Background task queuing and job scheduling system"
+    severity: high
+    detection_method: dependency_and_code
+    readme_keywords:
+      - bullmq
+      - celery
+      - rq
+      - dramatiq
+      - worker
+      - queue
+      - job
+      - background_task
+    rule_ref: rules/job_queue.json
+
+  - id: retry_logic
+    label: "Retry Logic & Backoff"
+    description: "Exponential backoff and retry mechanisms for fault tolerance"
+    severity: high
+    detection_method: code_pattern
+    readme_keywords:
+      - retry
+      - backoff
+      - exponential
+      - attempt
+      - maxAttempts
+      - resilient
+      - circuit_breaker
+    rule_ref: rules/retry_logic.json
+
+  - id: graceful_shutdown
+    label: "Graceful Shutdown"
+    description: "Clean process termination with resource cleanup"
+    severity: high
+    detection_method: code_pattern
+    readme_keywords:
+      - SIGTERM
+      - graceful
+      - shutdown
+      - cleanup
+      - beforeExit
+      - signal_handler
+    rule_ref: rules/graceful_shutdown.json
+
+  - id: structured_logging
+    label: "Structured Logging"
+    description: "JSON or structured log output for observability"
+    severity: medium
+    detection_method: dependency_and_code
+    readme_keywords:
+      - pino
+      - winston
+      - structlog
+      - json_log
+      - logger
+      - bunyan
+      - structured
+    rule_ref: rules/structured_logging.json
+
+  - id: observability
+    label: "Observability (Tracing/Metrics)"
+    description: "OpenTelemetry, Prometheus, or similar tracing/metrics infrastructure"
+    severity: medium
+    detection_method: dependency_and_code
+    readme_keywords:
+      - opentelemetry
+      - otel
+      - prometheus
+      - datadog
+      - tracing
+      - metrics
+      - span
+    rule_ref: rules/observability.json
+
+  - id: rate_limiting
+    label: "Rate Limiting & Concurrency Control"
+    description: "Rate limits, quotas, and concurrency management"
+    severity: medium
+    detection_method: code_pattern
+    readme_keywords:
+      - rate_limit
+      - throttle
+      - quota
+      - concurrency
+      - limiter
+      - semaphore
+    rule_ref: rules/rate_limiting.json
+
+  - id: auth_session
+    label: "Authentication & Session Management"
+    description: "JWT, OAuth, API keys, or session handling"
+    severity: high
+    detection_method: code_pattern
+    readme_keywords:
+      - jwt
+      - oauth
+      - session
+      - api_key
+      - authentication
+      - authorization
+      - token
+    rule_ref: rules/auth_session.json
+
+  - id: webhook_handler
+    label: "Webhook Handler & Verification"
+    description: "Webhook endpoint with HMAC or signature verification"
+    severity: medium
+    detection_method: code_pattern
+    readme_keywords:
+      - webhook
+      - HMAC
+      - signature
+      - verify
+      - event_handler
+      - callback
+    rule_ref: rules/webhook_handler.json
+
+  - id: multi_tenancy
+    label: "Multi-Tenancy Support"
+    description: "Tenant isolation, workspace management, or organization scoping"
+    severity: medium
+    detection_method: code_pattern
+    readme_keywords:
+      - tenant
+      - organization
+      - workspace
+      - multi_tenant
+      - isolation
+      - scoped
+    rule_ref: rules/multi_tenancy.json
+
+  - id: secret_management
+    label: "Secret Management"
+    description: "Vault, KMS, dotenv, or environment variable handling"
+    severity: high
+    detection_method: dependency_and_code
+    readme_keywords:
+      - vault
+      - dotenv
+      - secret
+      - env_var
+      - KMS
+      - credentials
+      - .env
+    rule_ref: rules/secret_management.json
+
+  - id: health_check
+    label: "Health Check Endpoint"
+    description: "Liveness/readiness probe or /health endpoint"
+    severity: medium
+    detection_method: code_pattern
+    readme_keywords:
+      - health
+      - liveness
+      - readiness
+      - /health
+      - ping
+      - status
+    rule_ref: rules/health_check.json
+
+  - id: async_streaming
+    label: "Async Streaming (SSE/WebSocket)"
+    description: "Server-sent events, WebSockets, or async generators for real-time data"
+    severity: medium
+    detection_method: code_pattern
+    readme_keywords:
+      - stream
+      - SSE
+      - websocket
+      - async_generator
+      - readable
+      - stream_events
+    rule_ref: rules/async_streaming.json
+
+  - id: tool_calling
+    label: "Tool/Function Calling"
+    description: "Framework support for tool invocation, function calling, or dynamic execution"
+    severity: high
+    detection_method: code_pattern
+    readme_keywords:
+      - tool
+      - function_call
+      - function_calling
+      - tool_use
+      - invoke
+      - dynamic_execution
+    rule_ref: rules/tool_calling.json
+
+  - id: memory_persistence
+    label: "Memory & Persistence (Vector Store)"
+    description: "Persistent memory, vector stores, or context window management"
+    severity: high
+    detection_method: code_pattern
+    readme_keywords:
+      - memory
+      - vector_store
+      - recall
+      - persist
+      - context_window
+      - embedding_store
+    rule_ref: rules/memory_persistence.json
+
+  - id: agent_loop
+    label: "Agent Loop (ReAct/Autonomous)"
+    description: "Core agent loop: plan, act, observe; or ReAct pattern"
+    severity: high
+    detection_method: code_pattern
+    readme_keywords:
+      - agent_loop
+      - ReAct
+      - plan
+      - act
+      - observe
+      - step
+      - autonomous
+      - reasoning
+    rule_ref: rules/agent_loop.json
+
+  - id: error_recovery
+    label: "Error Recovery & Dead Letter"
+    description: "Error recovery, fallback mechanisms, dead letter queues"
+    severity: high
+    detection_method: code_pattern
+    readme_keywords:
+      - error_recovery
+      - fallback
+      - circuit_breaker
+      - dead_letter
+      - error_handling
+      - exception
+    rule_ref: rules/error_recovery.json
+
+  - id: plugin_architecture
+    label: "Plugin/Extension Architecture"
+    description: "Plugin system, extensions, hooks, or middleware"
+    severity: medium
+    detection_method: code_pattern
+    readme_keywords:
+      - plugin
+      - extension
+      - hook
+      - middleware
+      - adapter
+      - provider
+    rule_ref: rules/plugin_architecture.json
+
+  - id: eval_harness
+    label: "Evaluation Harness"
+    description: "Built-in evaluation, testing, or benchmarking framework"
+    severity: medium
+    detection_method: code_pattern
+    readme_keywords:
+      - eval
+      - assertion
+      - benchmark
+      - test_suite
+      - accuracy
+      - performance_test
+    rule_ref: rules/eval_harness.json
