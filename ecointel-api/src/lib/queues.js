@@ -19,7 +19,7 @@ const defaultJobOptions = {
 /**
  * Ingest queue: GitHub repo metadata fetching
  */
-const ingestQueue = new Queue('ingest', {
+const ingestQueue = new Queue('ingest-queue', {
   connection: redis,
   defaultJobOptions,
 });
@@ -27,7 +27,7 @@ const ingestQueue = new Queue('ingest', {
 /**
  * Parse queue: Extract dependencies and metadata from source
  */
-const parseQueue = new Queue('parse', {
+const parseQueue = new Queue('parse-queue', {
   connection: redis,
   defaultJobOptions,
 });
@@ -35,7 +35,7 @@ const parseQueue = new Queue('parse', {
 /**
  * Embed queue: Generate embeddings for readme chunks and feature summaries
  */
-const embedQueue = new Queue('embed', {
+const embedQueue = new Queue('embed-queue', {
   connection: redis,
   defaultJobOptions,
 });
@@ -43,7 +43,7 @@ const embedQueue = new Queue('embed', {
 /**
  * Score queue: Compute health scores and feature completeness
  */
-const scoreQueue = new Queue('score', {
+const scoreQueue = new Queue('score-queue', {
   connection: redis,
   defaultJobOptions,
 });

@@ -153,6 +153,7 @@ CREATE TABLE IF NOT EXISTS ingest_jobs (
   attempts INT DEFAULT 0,
   last_error TEXT,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  started_at TIMESTAMPTZ,
   completed_at TIMESTAMPTZ
 );
 
