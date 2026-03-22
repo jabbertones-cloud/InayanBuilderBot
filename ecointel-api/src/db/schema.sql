@@ -108,7 +108,8 @@ CREATE INDEX IF NOT EXISTS idx_contrast_cache_peer ON contrast_cache(peer_id);
 -- API Keys
 CREATE TABLE IF NOT EXISTS api_keys (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  key_hash TEXT UNIQUE NOT NULL,
+  key_hash TEXT UNIQUE NOT NULL,          -- bcrypt hash for verification
+  key_lookup_hash TEXT UNIQUE NOT NULL,   -- SHA-256 hex for fast O(1) lookup before bcrypt
   label TEXT,
   tier TEXT CHECK (tier IN ('free', 'developer', 'usage', 'enterprise')) DEFAULT 'free',
   owner_email TEXT,
@@ -121,6 +122,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
 );
 
 CREATE INDEX IF NOT EXISTS idx_api_keys_key_hash ON api_keys(key_hash);
+CREATE INDEX IF NOT EXISTS idx_api_keys_lookup_hash ON api_keys(key_lookup_hash);
 CREATE INDEX IF NOT EXISTS idx_api_keys_revoked ON api_keys(revoked_at);
 
 -- Usage Events

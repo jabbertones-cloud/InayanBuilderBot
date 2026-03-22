@@ -5,6 +5,7 @@
 require('dotenv').config();
 
 const express = require('express');
+const crypto = require('crypto');
 const { redis } = require('../lib/redis');
 const db = require('../db');
 const bcrypt = require('bcrypt');
@@ -56,24 +57,29 @@ app.use(async (req, res, next) => {
   }
 
   try {
-    // Get all active API keys (we'll hash the provided key and compare)
+    // Fast O(1) lookup via SHA-256 hash, then single bcrypt verify on the match.
+    // key_lookup_hash = SHA-256(raw_key) stored at key-creation time.
+    const lookupHash = crypto
+      .createHash('sha256')
+      .update(apiKeyHeader)
+      .digest('hex');
+
     const result = await db.query(
       `SELECT id, key_hash, label, tier, quota_monthly, quota_used, quota_reset_at, revoked_at
        FROM api_keys
-       WHERE revoked_at IS NULL
-       ORDER BY created_at DESC
-       LIMIT 100`,
+       WHERE key_lookup_hash = $1
+         AND revoked_at IS NULL
+       LIMIT 1`,
+      [lookupHash],
     );
 
     let matchedKey = null;
 
-    for (const row of result.rows) {
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
       try {
         const isMatch = await bcrypt.compare(apiKeyHeader, row.key_hash);
-        if (isMatch) {
-          matchedKey = row;
-          break;
-        }
+        if (isMatch) matchedKey = row;
       } catch (err) {
         console.error('[auth] Bcrypt compare error:', err.message);
       }
