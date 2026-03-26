@@ -14,6 +14,7 @@ InayanBuilderBot is the **builder product** in the Index + Inayan Builder Loop. 
 - **Reddit search:** `POST /api/v1/reddit/search` — query-driven Reddit research (subreddits, ranking).
 - **GitHub research:** `POST /api/v1/github/research` — repo discovery, releases, signals.
 - **Research fusion:** `POST /api/v1/research/fusion` — combine Reddit + GitHub into a single research output (magic-run input).
+  - Optional deterministic selectors: `pipelineRunId`, `benchmarkRunId`, `githubRunId`, `redditRunId`, `githubQuery`, `redditQuery` (set `useLatestRuns=false`).
 - **Magic run:** `POST /api/v1/masterpiece/magic-run` — Scout → Benchmark → Blueprint → Execution Task List.
 - **Health:** `GET /health` — liveness for dashboards.
 
@@ -76,3 +77,4 @@ npm run dev:auto
 - **Reddit/GitHub 4xx:** Check env (REDDIT_*, GITHUB_TOKEN); use optional OAuth or tokens.
 - **Health failing:** Ensure SQLite/DB and required env are set; see INSTALLATION.md.
 - **Mission Control not reaching InayanBuilderBot:** Ensure InayanBuilderBot is running (e.g. port 3030) and CORS/network allow requests from Mission Control host.
+- **Fusion result drift between runs:** use deterministic fusion selectors with fixed run IDs (and persist the selected IDs in your run notes).

@@ -1735,9 +1735,26 @@ async function discoverScoutRepos({ queries, perQuery, minStars, topK, seedRepos
   const minNeeded = Math.max(topK, Math.min(30, perQuery * Math.max(1, queries.length)));
   if (discovered.length >= minNeeded) return discovered;
 
+  const hardenGithubQuery = (raw) => {
+    let q = String(raw || "")
+      .replace(/[\r\n\t]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!q) return "";
+    q = q
+      .replace(/\b(repo|org|user|is|sort|order):\S+/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!q) return "";
+    q = `${q} archived:false`;
+    return q.slice(0, 220);
+  };
+
   for (const q of queries) {
     try {
-      const items = await githubSearch({ query: q, perPage: perQuery, githubToken });
+      const query = hardenGithubQuery(q);
+      if (!query) continue;
+      const items = await githubSearch({ query, perPage: perQuery, githubToken });
       discovered.push(...items);
     } catch {
       // Keep pipeline resilient when GitHub API is unavailable/rate-limited.
@@ -1823,6 +1840,10 @@ function buildFusionLeaderboard({
   const repos = Array.isArray(benchmarkRepos) ? benchmarkRepos : [];
   const githubRepos = Array.isArray(githubReport?.repos) ? githubReport.repos : [];
   const githubAnswers = Array.isArray(githubReport?.answers) ? githubReport.answers : [];
+  const githubSourceErrors = Array.isArray(githubReport?.summary?.source_errors)
+    ? githubReport.summary.source_errors
+    : [];
+  const githubReliability = githubSourceErrors.length === 0 ? 1 : 0.82;
   const redditWeighted = buildWeightedRedditEvidence(redditReport, 20).weighted;
 
   const ghRepoMap = new Map(
@@ -1856,13 +1877,15 @@ function buildFusionLeaderboard({
     const breakPatternSignal = Math.min(12, Math.max(0, Number(repo.breakPatternEvidence || 0)) * 1.4);
 
     const ghRepo = ghRepoMap.get(key);
-    const githubRepoBoost = ghRepo
+    const githubRepoBoostRaw = ghRepo
       ? Math.min(14, Math.max(1, Number(ghRepo.score || 0) / 18))
       : 0;
-    const githubTermAlignment = Math.min(
+    const githubTermAlignmentRaw = Math.min(
       12,
       tokens.reduce((sum, t) => sum + Number(githubTermWeights.get(t) || 0), 0)
     );
+    const githubRepoBoost = githubRepoBoostRaw * githubReliability;
+    const githubTermAlignment = githubTermAlignmentRaw * githubReliability;
     const redditTermAlignment = Math.min(
       14,
       tokens.reduce((sum, t) => sum + Number(redditTermWeights.get(t) || 0), 0)
@@ -1912,6 +1935,8 @@ function buildFusionLeaderboard({
       input_benchmark_count: repos.length,
       github_repo_hits: githubRepos.length,
       github_answer_hits: githubAnswers.length,
+      github_source_error_count: githubSourceErrors.length,
+      github_reliability_factor: githubReliability,
       reddit_weighted_hits: redditWeighted.length,
       leaderboard_count: leaderboard.length,
     },
@@ -2011,6 +2036,60 @@ function getLatestResearchBundle(allRuns = []) {
     benchmarkRepos,
     githubReport,
     redditReport,
+  };
+}
+
+function getDeterministicResearchBundle(allRuns = [], selectors = {}) {
+  const byId = new Map(
+    (Array.isArray(allRuns) ? allRuns : [])
+      .map((r) => [String(r?.id || ""), r])
+      .filter(([id]) => Boolean(id))
+  );
+  const runs = Array.isArray(allRuns) ? allRuns : [];
+  const latest = getLatestResearchBundle(runs);
+
+  const findByTypeAndQuery = (type, query) => {
+    const q = String(query || "").trim().toLowerCase();
+    if (!q) return null;
+    return runs.find((r) => {
+      if (r?.type !== type) return false;
+      const payloadQ = String(r?.payload?.query || "").trim().toLowerCase();
+      const outputQ = String(r?.output?.summary?.query || "").trim().toLowerCase();
+      return payloadQ === q || outputQ === q;
+    }) || null;
+  };
+
+  const getByIdType = (id, type) => {
+    const run = id ? byId.get(String(id)) : null;
+    return run?.type === type ? run : null;
+  };
+
+  const pipelineRun = getByIdType(selectors.pipelineRunId, "pipeline");
+  const benchmarkRun = getByIdType(selectors.benchmarkRunId, "benchmark");
+  const githubRun = selectors.githubRunId ? getByIdType(selectors.githubRunId, "github_research") : findByTypeAndQuery("github_research", selectors.githubQuery);
+  const redditRun = selectors.redditRunId ? getByIdType(selectors.redditRunId, "reddit_research") : findByTypeAndQuery("reddit_research", selectors.redditQuery);
+
+  const benchmarkRepos = Array.isArray(pipelineRun?.output?.benchmark)
+    ? pipelineRun.output.benchmark
+    : Array.isArray(benchmarkRun?.output)
+      ? benchmarkRun.output
+      : latest.benchmarkRepos;
+
+  const githubReport = pipelineRun?.output?.github || githubRun?.output || latest.githubReport || null;
+  const redditReport = pipelineRun?.output?.reddit || redditRun?.output || latest.redditReport || null;
+
+  return {
+    benchmarkRepos,
+    githubReport,
+    redditReport,
+    selected: {
+      pipelineRunId: pipelineRun?.id || null,
+      benchmarkRunId: benchmarkRun?.id || null,
+      githubRunId: githubRun?.id || null,
+      redditRunId: redditRun?.id || null,
+      githubQuery: githubRun?.payload?.query || githubRun?.output?.summary?.query || selectors.githubQuery || null,
+      redditQuery: redditRun?.payload?.query || redditRun?.output?.summary?.query || selectors.redditQuery || null,
+    },
   };
 }
 
@@ -3057,6 +3136,12 @@ const GithubResearchSchema = z.object({
 const FusionResearchSchema = z.object({
   topK: z.number().int().min(3).max(30).default(10),
   useLatestRuns: z.boolean().default(true),
+  pipelineRunId: z.string().min(4).max(120).optional(),
+  benchmarkRunId: z.string().min(4).max(120).optional(),
+  githubRunId: z.string().min(4).max(120).optional(),
+  redditRunId: z.string().min(4).max(120).optional(),
+  githubQuery: z.string().min(2).max(300).optional(),
+  redditQuery: z.string().min(2).max(300).optional(),
 });
 
 const ChatSchema = z.object({
@@ -3743,7 +3828,25 @@ export function createApp() {
     if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
 
     const p = parsed.data;
-    const bundle = getLatestResearchBundle(appState.runs);
+    const bundle = p.useLatestRuns
+      ? getLatestResearchBundle(appState.runs)
+      : getDeterministicResearchBundle(appState.runs, p);
+    if (!p.useLatestRuns) {
+      const unresolved = [];
+      if (p.pipelineRunId && !bundle.selected?.pipelineRunId) unresolved.push("pipelineRunId");
+      if (p.benchmarkRunId && !bundle.selected?.benchmarkRunId) unresolved.push("benchmarkRunId");
+      if (p.githubRunId && !bundle.selected?.githubRunId) unresolved.push("githubRunId");
+      if (p.redditRunId && !bundle.selected?.redditRunId) unresolved.push("redditRunId");
+      if (p.githubQuery && !bundle.selected?.githubRunId) unresolved.push("githubQuery");
+      if (p.redditQuery && !bundle.selected?.redditRunId) unresolved.push("redditQuery");
+      if (unresolved.length) {
+        return res.status(400).json({
+          ok: false,
+          error: "deterministic_selector_unresolved",
+          detail: `Selectors not resolved: ${unresolved.join(", ")}`,
+        });
+      }
+    }
     if (!bundle.benchmarkRepos.length) {
       return res.status(404).json({
         ok: false,
@@ -3787,6 +3890,7 @@ export function createApp() {
         benchmark_count: bundle.benchmarkRepos.length,
         has_github: Boolean(bundle.githubReport),
         has_reddit: Boolean(bundle.redditReport),
+        selected: bundle.selected || null,
       },
     });
   });
@@ -3926,6 +4030,8 @@ export function createApp() {
     const stageResults = [];
     let githubReport = null;
     let redditReport = null;
+    let effectiveGithubQuery = null;
+    let effectiveRedditQuery = null;
 
     const scoutPayload = {
       queries: p.queries,
@@ -4074,6 +4180,7 @@ export function createApp() {
         maxResults: Number(p?.github?.maxResults || 40),
       });
       try {
+        effectiveGithubQuery = githubQuery;
         githubReport = getHybridCache(PIPELINE_GITHUB_CACHE, githubCacheKey, "github_research", githubQuery);
         let cached = true;
         if (!githubReport) {
@@ -4123,6 +4230,7 @@ export function createApp() {
             maxResults: 24,
           });
           setHybridCache(PIPELINE_GITHUB_CACHE, fallbackKey, "github_research", fallbackQuery, githubReport);
+          effectiveGithubQuery = fallbackQuery;
           if (indexStore?.enabled) {
             indexStore.saveGithubEvidence({ query: fallbackQuery, report: githubReport });
             indexStore.refreshRepos({
@@ -4179,6 +4287,7 @@ export function createApp() {
         maxResults: Number(p?.reddit?.maxResults || 60),
       });
       try {
+        effectiveRedditQuery = redditQuery;
         redditReport = getHybridCache(PIPELINE_REDDIT_CACHE, redditCacheKey, "reddit_research", redditQuery);
         let cached = true;
         if (!redditReport) {
@@ -4290,6 +4399,10 @@ export function createApp() {
       output: {
         ok,
         stageResults,
+          researchInputs: {
+            githubQuery: effectiveGithubQuery,
+            redditQuery: effectiveRedditQuery,
+          },
         scout: scoutRepos,
         benchmark: benchmarkRanked,
         github: githubReport,
@@ -4309,8 +4422,8 @@ export function createApp() {
         stage: "pipeline_fusion",
         repos: Array.isArray(fusion?.leaderboard) ? fusion.leaderboard : [],
       });
-      if (githubReport) indexStore.saveGithubEvidence({ query: p.userGoal, report: githubReport });
-      if (redditReport) indexStore.saveRedditEvidence({ query: p.userGoal, report: redditReport });
+      if (githubReport) indexStore.saveGithubEvidence({ query: effectiveGithubQuery || p.userGoal, report: githubReport });
+      if (redditReport) indexStore.saveRedditEvidence({ query: effectiveRedditQuery || p.userGoal, report: redditReport });
     }
     trimHistory();
     persistDataStore();
@@ -4319,6 +4432,10 @@ export function createApp() {
       ok,
       runId,
       stageResults,
+      researchInputs: {
+        githubQuery: effectiveGithubQuery,
+        redditQuery: effectiveRedditQuery,
+      },
       scout: scoutRepos,
       benchmark: benchmarkRanked,
       github: githubReport,
@@ -4407,16 +4524,21 @@ export function createApp() {
       setCache(MAGIC_RUN_BENCH_CACHE, benchCacheKey, benchmark);
     }
 
-    let githubReport = null;
-    let redditReport = null;
     const magicInput = {
       productName: p.productName,
       userGoal: p.userGoal,
       queries,
     };
+    let githubReport = null;
+    let redditReport = null;
+    const effectiveGithubQuery = buildScopedGithubQuery(magicInput, 220);
+    const effectiveRedditQuery = buildScopedGithubQuery({
+      ...magicInput,
+      queries: [...queries, "builder", "workflow"],
+    }, 220);
     try {
       githubReport = await doGithubResearch({
-        query: buildScopedGithubQuery(magicInput, 220),
+        query: effectiveGithubQuery,
         perPage: 20,
         maxResults: timeoutTierConfig.maxResults,
         githubToken: GITHUB_TOKEN,
@@ -4426,10 +4548,7 @@ export function createApp() {
     }
     try {
       redditReport = await doRedditResearch({
-        query: buildScopedGithubQuery({
-          ...magicInput,
-          queries: [...queries, "builder", "workflow"],
-        }, 220),
+        query: effectiveRedditQuery,
         subreddits: selectIntentSubreddits(magicInput, REDDIT_DEFAULT_SUBREDDITS),
         limitPerSubreddit: timeoutTierConfig.redditLimit,
         timeWindow: "year",
@@ -4463,6 +4582,10 @@ export function createApp() {
       stack: p.stack,
       selectedRepos,
       evidence,
+      researchInputs: {
+        githubQuery: effectiveGithubQuery,
+        redditQuery: effectiveRedditQuery,
+      },
       constraints: p.constraints,
     });
     baseBlueprint.decisionCitations = decisionCitations;
@@ -4603,8 +4726,8 @@ export function createApp() {
         stage: "magic_fusion",
         repos: Array.isArray(fusion?.leaderboard) ? fusion.leaderboard : [],
       });
-      if (githubReport) indexStore.saveGithubEvidence({ query: p.userGoal, report: githubReport });
-      if (redditReport) indexStore.saveRedditEvidence({ query: p.userGoal, report: redditReport });
+      if (githubReport) indexStore.saveGithubEvidence({ query: effectiveGithubQuery || p.userGoal, report: githubReport });
+      if (redditReport) indexStore.saveRedditEvidence({ query: effectiveRedditQuery || p.userGoal, report: redditReport });
       indexStore.upsertProjectMemory({ projectKey, memory: updatedMemory });
     }
     trimHistory();
@@ -4685,13 +4808,19 @@ export function createApp() {
 
     let githubReport = null;
     let redditReport = null;
+    const effectiveGithubQuery = buildScopedGithubQuery({
+      productName: p.productName,
+      userGoal: p.userGoal,
+      queries: [...discoveryQueries, "playwright", "lighthouse", "axe-core", "contract testing"],
+    }, 220);
+    const effectiveRedditQuery = buildScopedGithubQuery({
+      productName: p.productName,
+      userGoal: p.userGoal,
+      queries: [...discoveryQueries, "user friction", "conversion"],
+    }, 220);
     try {
       githubReport = await doGithubResearch({
-        query: buildScopedGithubQuery({
-          productName: p.productName,
-          userGoal: p.userGoal,
-          queries: [...discoveryQueries, "playwright", "lighthouse", "axe-core", "contract testing"],
-        }, 220),
+        query: effectiveGithubQuery,
         perPage: 20,
         maxResults: timeoutTierConfig.maxResults,
         githubToken: GITHUB_TOKEN,
@@ -4701,11 +4830,7 @@ export function createApp() {
     }
     try {
       redditReport = await doRedditResearch({
-        query: buildScopedGithubQuery({
-          productName: p.productName,
-          userGoal: p.userGoal,
-          queries: [...discoveryQueries, "user friction", "conversion"],
-        }, 220),
+        query: effectiveRedditQuery,
         subreddits: selectIntentSubreddits({
           productName: p.productName,
           userGoal: p.userGoal,
@@ -4746,6 +4871,10 @@ export function createApp() {
     const decisionCitations = buildDecisionCitations({
       selectedRepos: exemplars.map((x) => ({ full_name: x.full_name, benchmarkScore: x.score })),
       evidence,
+      researchInputs: {
+        githubQuery: effectiveGithubQuery,
+        redditQuery: effectiveRedditQuery,
+      },
     });
     const coverage = buildRepoCoverage(p.focusRepos);
     const avgExemplarScore = exemplars.length
@@ -4840,8 +4969,8 @@ export function createApp() {
         stage: "finishing_fusion",
         repos: Array.isArray(fusion?.leaderboard) ? fusion.leaderboard : [],
       });
-      if (githubReport) indexStore.saveGithubEvidence({ query: p.userGoal, report: githubReport });
-      if (redditReport) indexStore.saveRedditEvidence({ query: p.userGoal, report: redditReport });
+      if (githubReport) indexStore.saveGithubEvidence({ query: effectiveGithubQuery || p.userGoal, report: githubReport });
+      if (redditReport) indexStore.saveRedditEvidence({ query: effectiveRedditQuery || p.userGoal, report: redditReport });
     }
     trimHistory();
     persistDataStore();

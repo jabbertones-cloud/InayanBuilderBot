@@ -85,7 +85,7 @@ Real-system execution mode (`/api/v1/masterpiece/pipeline/run` with `runExternal
 - `POST /api/v1/github/research`
 - `GET /api/v1/reddit/capabilities`
 - `POST /api/v1/reddit/search`
-- `POST /api/v1/research/fusion`
+- `POST /api/v1/research/fusion` (supports deterministic selectors)
 
 ### Chat + Sessions
 - `POST /api/v1/chat/reply`
@@ -276,6 +276,7 @@ Research is native to the product:
 - Reddit fallback-chain signal collection and ranking
 - fusion leaderboard that blends benchmark + research evidence
 - citation attachment for major planning decisions
+- deterministic source selection (`useLatestRuns=false` + run/query selectors) for reproducible fusion outputs
 
 See: [`docs/RESEARCH_AND_BENCHMARKS.md`](./docs/RESEARCH_AND_BENCHMARKS.md)
 See also: [`docs/FINISHING-PROCESS.md`](./docs/FINISHING-PROCESS.md)

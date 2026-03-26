@@ -19,8 +19,20 @@ Use external evidence to improve:
 
 - `POST /api/v1/github/research`: repo + issue/code-answer evidence
 - `POST /api/v1/reddit/search`: ranked community signals
-- `POST /api/v1/research/fusion`: combined leaderboard
+- `POST /api/v1/research/fusion`: combined leaderboard, optional deterministic selectors (`pipelineRunId`, `benchmarkRunId`, `githubRunId`, `redditRunId`, `githubQuery`, `redditQuery`)
 - `POST /api/v1/masterpiece/magic-run`: evidence-informed deterministic output
+
+## Deterministic Fusion Inputs
+
+- Default behavior (`useLatestRuns=true`) uses the newest benchmark/github/reddit bundle.
+- Deterministic behavior (`useLatestRuns=false`) allows explicit run-id or query-based selectors.
+- Selection precedence: explicit run IDs -> query selectors -> latest bundle fallback.
+- Fusion output now reports selected source metadata under `sources.selected`.
+
+## Evidence Lineage
+
+- Pipeline, magic-run, and finish-run now persist evidence with the effective research queries used at runtime.
+- Fusion scoring now downweights GitHub-derived signals when GitHub `source_errors` are present.
 
 ## Benchmark Update Protocol
 
