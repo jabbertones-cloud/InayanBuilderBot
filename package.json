@@ -10,6 +10,8 @@
     "execution-ready blueprint",
     "github research",
     "reddit research",
+    "last30days research",
+    "real-time community intelligence",
     "express api",
     "mcp"
   ],
@@ -45,9 +47,17 @@
     "qa": "npx ts-node qa/super-qa-runner.ts",
     "qa:fast": "npx ts-node qa/super-qa-runner.ts --fast",
     "qa:static": "npx ts-node qa/super-qa-runner.ts --layer static",
+    "qa:determinism": "npx ts-node qa/super-qa-runner.ts --layer determinism",
+    "qa:runaway": "npx ts-node qa/super-qa-runner.ts --layer runaway-detection",
+    "qa:sandbox": "npx ts-node qa/super-qa-runner.ts --layer sandbox-escape",
+    "qa:cost": "npx ts-node qa/super-qa-runner.ts --layer cost-regression",
+    "qa:community": "npx ts-node qa/super-qa-runner.ts --layer community-qa",
     "qa:semgrep": "cd qa/semgrep && bash run-semgrep.sh",
     "ai-explorer": "npx ts-node qa/ai-explorer/run-explorer.ts --steps 500 --strategy mixed",
-    "ai-explorer:fast": "npx ts-node qa/ai-explorer/run-explorer.ts --steps 100 --strategy random"
+    "ai-explorer:fast": "npx ts-node qa/ai-explorer/run-explorer.ts --steps 100 --strategy random",
+    "check": "npm run -s lint",
+    "last30days:setup": "git clone https://github.com/mvanhorn/last30days-skill.git vendor/last30days-skill 2>/dev/null || echo 'Already cloned or git unavailable'",
+    "last30days:test": "python3 vendor/last30days-skill/scripts/last30days.py 'AI builder agent' --emit=compact --quick"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",

@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-03-21T03:25:45.103Z",
+  "mode": "full",
+  "repo": "InayanBuilderBot",
+  "total_duration_ms": 30178,
+  "overall_status": "FAIL",
+  "layers": [
+    {
+      "layer": "unit",
+      "status": "fail",
+      "duration_ms": 30178,
+      "findings": 0,
+      "critical": 0,
+      "details": "9 passed, 0 failed. Exit code 1."
+    }
+  ],
+  "summary": {
+    "total_layers": 1,
+    "passed": 0,
+    "failed": 1,
+    "warned": 0,
+    "skipped": 0,
+    "total_findings": 0,
+    "total_critical": 0
+  }
+}

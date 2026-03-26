@@ -1,0 +1,66 @@
+{
+  "timestamp": "2026-03-20T21:05:01.910Z",
+  "mode": "fast",
+  "repo": "InayanBuilderBot",
+  "total_duration_ms": 403835,
+  "overall_status": "FAIL",
+  "layers": [
+    {
+      "layer": "lint",
+      "status": "pass",
+      "duration_ms": 1427,
+      "findings": 0,
+      "critical": 0,
+      "details": "Exit code 0."
+    },
+    {
+      "layer": "unit",
+      "status": "fail",
+      "duration_ms": 301233,
+      "findings": 1,
+      "critical": 1,
+      "details": "Exit code 1."
+    },
+    {
+      "layer": "e2e",
+      "status": "warn",
+      "duration_ms": 27575,
+      "findings": 0,
+      "critical": 0,
+      "details": "0 passed, 0 failed. Exit code 1."
+    },
+    {
+      "layer": "security",
+      "status": "pass",
+      "duration_ms": 45766,
+      "findings": 0,
+      "critical": 0,
+      "details": "Exit code 0."
+    },
+    {
+      "layer": "claw:security",
+      "status": "warn",
+      "duration_ms": 11249,
+      "findings": 0,
+      "critical": 0,
+      "details": "Exit code 1. 0 critical."
+    },
+    {
+      "layer": "claw:baseline",
+      "status": "fail",
+      "duration_ms": 16361,
+      "findings": 1,
+      "critical": 1,
+      "details": "Exit code 1."
+    }
+  ],
+  "summary": {
+    "total_layers": 6,
+    "passed": 2,
+    "failed": 2,
+    "warned": 2,
+    "skipped": 0,
+    "total_findings": 2,
+    "total_critical": 2
+  }
+}

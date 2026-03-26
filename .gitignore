@@ -16,3 +16,4 @@ dist/
 .data/
 playwright-report/
 test-results/
+vendor/last30days-skill

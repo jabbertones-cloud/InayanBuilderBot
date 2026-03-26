@@ -9,6 +9,11 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import { createSqliteIndexStore } from "./sqlite-index-store.js";
+import {
+  runLast30DaysResearch,
+  buildLast30DaysTermWeights,
+  extractLast30DaysEvidence,
+} from "./last30days-research.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,6 +47,8 @@ const PIPELINE_SCOUT_CACHE = new Map();
 const PIPELINE_BENCH_CACHE = new Map();
 const PIPELINE_GITHUB_CACHE = new Map();
 const PIPELINE_REDDIT_CACHE = new Map();
+const MAGIC_RUN_LAST30DAYS_CACHE = new Map();
+const LAST30DAYS_ENABLED = process.env.LAST30DAYS_ENABLED !== "false"; // enabled by default
 const MAGIC_RUN_CACHE_TTL_MS = Number(process.env.MAGIC_RUN_CACHE_TTL_MS || 10 * 60 * 1000);
 const MAGIC_RUN_MAX_BUDGET_USD = Number(process.env.MAGIC_RUN_MAX_BUDGET_USD || 25000);
 const GAP_HOTSPOT_TTL_MS = Number(process.env.GAP_HOTSPOT_TTL_MS || 5 * 60 * 1000);
@@ -441,7 +448,7 @@ function deterministicRepoSort(repos) {
   });
 }
 
-function buildEvidencePack({ githubReport, redditReport, fusion, top = 8 }) {
+function buildEvidencePack({ githubReport, redditReport, fusion, last30daysReport, top = 8 }) {
   return {
     github: Array.isArray(githubReport?.answers)
       ? githubReport.answers.slice(0, top).map((x) => ({
@@ -465,6 +472,20 @@ function buildEvidencePack({ githubReport, redditReport, fusion, top = 8 }) {
         reasons: Array.isArray(x.reasons) ? x.reasons.slice(0, 4) : [],
       }))
       : [],
+    last30days: Array.isArray(last30daysReport?.items)
+      ? last30daysReport.items.slice(0, top).map((x) => ({
+        source: x.source,
+        title: (x.title || "").slice(0, 200),
+        handle: x.handle || null,
+        engagement: Math.round(x.engagement || 0),
+        url: x.url || null,
+      }))
+      : [],
+    last30days_summary: last30daysReport?.summary || null,
+    last30days_top_voices: last30daysReport?.top_voices || [],
+    last30days_markets: Array.isArray(last30daysReport?.markets)
+      ? last30daysReport.markets.slice(0, 5)
+      : [],
   };
 }
 
@@ -481,11 +502,32 @@ function buildExecutableBlueprint({
     "Initial scope targets MVP shipping speed over full enterprise breadth.",
     "APIs and data contracts are versioned from day one.",
   ];
+
+  // ── Community intelligence enrichment ──────────────────────────────────
+  // When last30days evidence is available, mine it for additional signals
+  // that inform the blueprint (file plan, test plan, assumptions, rollout).
+  const l30d = evidence?.last30days || [];
+  const l30dVoices = evidence?.last30days_top_voices || [];
+  const l30dMarkets = evidence?.last30days_markets || [];
+
+  // Extract recurring themes from community items to surface as assumptions
+  const communityThemes = extractCommunityThemes(l30d);
+  if (communityThemes.length > 0) {
+    assumptions.push(
+      `Community signal (${l30d.length} items across multiple platforms) validates demand for this approach.`
+    );
+  }
+  if (l30dMarkets.length > 0) {
+    assumptions.push(
+      "Prediction markets indicate growing interest in this space (Polymarket signal)."
+    );
+  }
+
   const confidence = Math.min(
     0.95,
     0.55
       + Math.min(0.2, (Array.isArray(selectedRepos) ? selectedRepos.length : 0) * 0.02)
-      + Math.min(0.2, ((evidence?.github?.length || 0) + (evidence?.reddit?.length || 0)) * 0.01)
+      + Math.min(0.2, ((evidence?.github?.length || 0) + (evidence?.reddit?.length || 0) + (evidence?.last30days?.length || 0)) * 0.01)
   );
 
   const filePlan = [
@@ -499,6 +541,17 @@ function buildExecutableBlueprint({
     { path: "tests/e2e/deploy-targets.spec.ts", purpose: "Playwright checks for Replit/Vercel deployment paths." },
     { path: "playwright.config.ts", purpose: "Browser test configuration for CI and local smoke lanes." },
   ];
+
+  // Dynamically add file plan entries based on community signals
+  if (communityThemes.includes("monitoring") || communityThemes.includes("observability")) {
+    filePlan.push({ path: "src/core/observability/telemetry.ts", purpose: "OpenTelemetry instrumentation (community-recommended for production AI agents)." });
+  }
+  if (communityThemes.includes("streaming") || communityThemes.includes("real-time")) {
+    filePlan.push({ path: "src/api/stream/sse-handler.ts", purpose: "Server-Sent Events for real-time plan progress (trending community pattern)." });
+  }
+  if (communityThemes.includes("evaluation") || communityThemes.includes("evals")) {
+    filePlan.push({ path: "src/core/evals/eval-harness.ts", purpose: "LLM evaluation harness for output quality scoring (community best practice)." });
+  }
 
   const apiContracts = [
     { method: "POST", path: "/api/v1/masterpiece/magic-run", body: "{ userGoal, productName?, stack?, constraints? }" },
@@ -522,12 +575,30 @@ function buildExecutableBlueprint({
     "Playwright E2E: deployment split checks enforce Replit/Vercel route expectations.",
   ];
 
+  // Add community-informed test requirements
+  if (communityThemes.includes("determinism") || communityThemes.includes("reproducibility")) {
+    testPlan.push("Community-flagged: Run golden-input regression suite to catch non-determinism across model updates.");
+  }
+  if (communityThemes.includes("latency") || communityThemes.includes("performance")) {
+    testPlan.push("Community-flagged: Per-endpoint P95 latency benchmarks with automated SLA regression alerts.");
+  }
+  if (communityThemes.includes("security") || communityThemes.includes("injection")) {
+    testPlan.push("Community-flagged: Prompt injection resistance tests on all LLM-facing endpoints.");
+  }
+
   const rollout = [
     "Feature flag MAGIC_RUN_V2=true for internal dogfood.",
     "Enable for 10% of sessions; monitor pass rate and latency.",
     "Promote to 100% once median run latency and quality thresholds are met.",
     "Keep rollback path to legacy /api/v1/masterpiece/pipeline/run.",
   ];
+
+  // Add community voice attribution to rollout strategy
+  if (l30dVoices.length > 0) {
+    rollout.push(
+      `Monitor community channels (top voices: ${l30dVoices.slice(0, 3).join(", ")}) for adoption feedback during rollout.`
+    );
+  }
 
   return {
     productName,
@@ -538,6 +609,12 @@ function buildExecutableBlueprint({
     confidence: Math.round(confidence * 1000) / 1000,
     assumptions,
     evidence,
+    communityInsights: {
+      themes: communityThemes,
+      voiceCount: l30dVoices.length,
+      itemCount: l30d.length,
+      marketSignals: l30dMarkets.length,
+    },
     executable: {
       filePlan,
       apiContracts,
@@ -546,6 +623,46 @@ function buildExecutableBlueprint({
       rollout,
     },
   };
+}
+
+/**
+ * Extract recurring themes from last30days community items.
+ * Returns a deduplicated list of recognized theme keywords found in titles/snippets.
+ */
+function extractCommunityThemes(last30daysItems) {
+  if (!Array.isArray(last30daysItems) || last30daysItems.length === 0) return [];
+
+  const THEME_PATTERNS = [
+    { theme: "monitoring", pattern: /\b(monitor|observ|telemetry|opentelemetry|otel)\b/i },
+    { theme: "streaming", pattern: /\b(stream|sse|server.sent|real.time|websocket)\b/i },
+    { theme: "evaluation", pattern: /\b(eval|evals|benchmark|scoring|quality.gate)\b/i },
+    { theme: "determinism", pattern: /\b(determinism|deterministic|reproducib|idempoten)\b/i },
+    { theme: "latency", pattern: /\b(latency|p95|p99|performance|slow|fast)\b/i },
+    { theme: "security", pattern: /\b(security|injection|prompt.inject|guard|sandbox)\b/i },
+    { theme: "testing", pattern: /\b(test|qa|ci.cd|continuous.integr|playwright|jest)\b/i },
+    { theme: "cost", pattern: /\b(cost|pricing|token.usage|budget|cheap|expensive)\b/i },
+    { theme: "ux", pattern: /\b(ux|user.experience|onboard|dashboard|ui)\b/i },
+    { theme: "memory", pattern: /\b(memory|context|persist|state.manage|session)\b/i },
+    { theme: "multi-agent", pattern: /\b(multi.agent|swarm|orchestrat|coordinat|parallel.agent)\b/i },
+    { theme: "open-source", pattern: /\b(open.source|oss|self.host|local.first)\b/i },
+    { theme: "real-time", pattern: /\b(real.time|live|instant|push)\b/i },
+  ];
+
+  const themeCounts = new Map();
+  for (const item of last30daysItems) {
+    const text = `${item.title || ""} ${item.snippet || ""}`;
+    for (const { theme, pattern } of THEME_PATTERNS) {
+      if (pattern.test(text)) {
+        themeCounts.set(theme, (themeCounts.get(theme) || 0) + 1);
+      }
+    }
+  }
+
+  // Return themes that appear in at least 2 items (not noise)
+  return [...themeCounts.entries()]
+    .filter(([, count]) => count >= 2)
+    .sort(([, a], [, b]) => b - a)
+    .map(([theme]) => theme);
 }
 
 function evaluateBlueprint(blueprint) {
@@ -1735,26 +1852,9 @@ async function discoverScoutRepos({ queries, perQuery, minStars, topK, seedRepos
   const minNeeded = Math.max(topK, Math.min(30, perQuery * Math.max(1, queries.length)));
   if (discovered.length >= minNeeded) return discovered;
 
-  const hardenGithubQuery = (raw) => {
-    let q = String(raw || "")
-      .replace(/[\r\n\t]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!q) return "";
-    q = q
-      .replace(/\b(repo|org|user|is|sort|order):\S+/gi, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (!q) return "";
-    q = `${q} archived:false`;
-    return q.slice(0, 220);
-  };
-
   for (const q of queries) {
     try {
-      const query = hardenGithubQuery(q);
-      if (!query) continue;
-      const items = await githubSearch({ query, perPage: perQuery, githubToken });
+      const items = await githubSearch({ query: q, perPage: perQuery, githubToken });
       discovered.push(...items);
     } catch {
       // Keep pipeline resilient when GitHub API is unavailable/rate-limited.
@@ -1835,16 +1935,14 @@ function buildFusionLeaderboard({
   benchmarkRepos,
   githubReport,
   redditReport,
+  last30daysTermWeights: l30dWeightsInput,
   topK = 10,
 }) {
   const repos = Array.isArray(benchmarkRepos) ? benchmarkRepos : [];
   const githubRepos = Array.isArray(githubReport?.repos) ? githubReport.repos : [];
   const githubAnswers = Array.isArray(githubReport?.answers) ? githubReport.answers : [];
-  const githubSourceErrors = Array.isArray(githubReport?.summary?.source_errors)
-    ? githubReport.summary.source_errors
-    : [];
-  const githubReliability = githubSourceErrors.length === 0 ? 1 : 0.82;
   const redditWeighted = buildWeightedRedditEvidence(redditReport, 20).weighted;
+  const last30dTermWeights = l30dWeightsInput instanceof Map ? l30dWeightsInput : new Map();
 
   const ghRepoMap = new Map(
     githubRepos.map((r) => [String(r.full_name || "").toLowerCase(), r]).filter(([k]) => Boolean(k))
@@ -1877,28 +1975,36 @@ function buildFusionLeaderboard({
     const breakPatternSignal = Math.min(12, Math.max(0, Number(repo.breakPatternEvidence || 0)) * 1.4);
 
     const ghRepo = ghRepoMap.get(key);
-    const githubRepoBoostRaw = ghRepo
+    const githubRepoBoost = ghRepo
       ? Math.min(14, Math.max(1, Number(ghRepo.score || 0) / 18))
       : 0;
-    const githubTermAlignmentRaw = Math.min(
+    const githubTermAlignment = Math.min(
       12,
       tokens.reduce((sum, t) => sum + Number(githubTermWeights.get(t) || 0), 0)
     );
-    const githubRepoBoost = githubRepoBoostRaw * githubReliability;
-    const githubTermAlignment = githubTermAlignmentRaw * githubReliability;
     const redditTermAlignment = Math.min(
       14,
       tokens.reduce((sum, t) => sum + Number(redditTermWeights.get(t) || 0), 0)
     );
+    const last30dTermAlignment = Math.min(
+      16,
+      tokens.reduce((sum, t) => sum + Number(last30dTermWeights.get(t) || 0), 0)
+    );
 
+    // When last30days data is available, redistribute weights slightly (total stays 1.0):
+    // baseBenchmark: 0.54 (was 0.58), last30d: 0.04 (new)
+    const hasL30d = last30dTermWeights.size > 0;
+    const wBench = hasL30d ? 0.54 : 0.58;
+    const wL30d = hasL30d ? 0.04 : 0;
     const fusionScore = roundNumber(
-      baseBenchmark * 0.58
+      baseBenchmark * wBench
       + indexSignal * 0.14
       + uiSignal * 0.1
       + breakPatternSignal * 0.08
       + githubRepoBoost * 0.08
       + githubTermAlignment * 0.04
-      + redditTermAlignment * 0.06,
+      + redditTermAlignment * 0.06
+      + last30dTermAlignment * wL30d,
       2
     );
 
@@ -1909,6 +2015,7 @@ function buildFusionLeaderboard({
     if (githubRepoBoost >= 4) reasons.push("validated by GitHub repo research");
     if (githubTermAlignment >= 3) reasons.push("aligned with high-signal GitHub answer terms");
     if (redditTermAlignment >= 3) reasons.push("aligned with validated Reddit build signals");
+    if (last30dTermAlignment >= 3) reasons.push("aligned with last30days real-time community signals");
     if (!reasons.length) reasons.push("solid baseline benchmark and index profile");
 
     return {
@@ -1916,13 +2023,14 @@ function buildFusionLeaderboard({
       benchmarkScore: roundNumber(baseBenchmark, 2),
       fusionScore,
       breakdown: {
-        baseBenchmark: roundNumber(baseBenchmark * 0.58, 2),
+        baseBenchmark: roundNumber(baseBenchmark * wBench, 2),
         indexSignal: roundNumber(indexSignal * 0.14, 2),
         uiSignal: roundNumber(uiSignal * 0.1, 2),
         breakPatternSignal: roundNumber(breakPatternSignal * 0.08, 2),
         githubRepoBoost: roundNumber(githubRepoBoost * 0.08, 2),
         githubTermAlignment: roundNumber(githubTermAlignment * 0.04, 2),
         redditTermAlignment: roundNumber(redditTermAlignment * 0.06, 2),
+        last30dTermAlignment: roundNumber(last30dTermAlignment * wL30d, 2),
       },
       reasons,
     };
@@ -1935,9 +2043,8 @@ function buildFusionLeaderboard({
       input_benchmark_count: repos.length,
       github_repo_hits: githubRepos.length,
       github_answer_hits: githubAnswers.length,
-      github_source_error_count: githubSourceErrors.length,
-      github_reliability_factor: githubReliability,
       reddit_weighted_hits: redditWeighted.length,
+      last30days_term_count: last30dTermWeights.size,
       leaderboard_count: leaderboard.length,
     },
     leaderboard,
@@ -2036,60 +2143,6 @@ function getLatestResearchBundle(allRuns = []) {
     benchmarkRepos,
     githubReport,
     redditReport,
-  };
-}
-
-function getDeterministicResearchBundle(allRuns = [], selectors = {}) {
-  const byId = new Map(
-    (Array.isArray(allRuns) ? allRuns : [])
-      .map((r) => [String(r?.id || ""), r])
-      .filter(([id]) => Boolean(id))
-  );
-  const runs = Array.isArray(allRuns) ? allRuns : [];
-  const latest = getLatestResearchBundle(runs);
-
-  const findByTypeAndQuery = (type, query) => {
-    const q = String(query || "").trim().toLowerCase();
-    if (!q) return null;
-    return runs.find((r) => {
-      if (r?.type !== type) return false;
-      const payloadQ = String(r?.payload?.query || "").trim().toLowerCase();
-      const outputQ = String(r?.output?.summary?.query || "").trim().toLowerCase();
-      return payloadQ === q || outputQ === q;
-    }) || null;
-  };
-
-  const getByIdType = (id, type) => {
-    const run = id ? byId.get(String(id)) : null;
-    return run?.type === type ? run : null;
-  };
-
-  const pipelineRun = getByIdType(selectors.pipelineRunId, "pipeline");
-  const benchmarkRun = getByIdType(selectors.benchmarkRunId, "benchmark");
-  const githubRun = selectors.githubRunId ? getByIdType(selectors.githubRunId, "github_research") : findByTypeAndQuery("github_research", selectors.githubQuery);
-  const redditRun = selectors.redditRunId ? getByIdType(selectors.redditRunId, "reddit_research") : findByTypeAndQuery("reddit_research", selectors.redditQuery);
-
-  const benchmarkRepos = Array.isArray(pipelineRun?.output?.benchmark)
-    ? pipelineRun.output.benchmark
-    : Array.isArray(benchmarkRun?.output)
-      ? benchmarkRun.output
-      : latest.benchmarkRepos;
-
-  const githubReport = pipelineRun?.output?.github || githubRun?.output || latest.githubReport || null;
-  const redditReport = pipelineRun?.output?.reddit || redditRun?.output || latest.redditReport || null;
-
-  return {
-    benchmarkRepos,
-    githubReport,
-    redditReport,
-    selected: {
-      pipelineRunId: pipelineRun?.id || null,
-      benchmarkRunId: benchmarkRun?.id || null,
-      githubRunId: githubRun?.id || null,
-      redditRunId: redditRun?.id || null,
-      githubQuery: githubRun?.payload?.query || githubRun?.output?.summary?.query || selectors.githubQuery || null,
-      redditQuery: redditRun?.payload?.query || redditRun?.output?.summary?.query || selectors.redditQuery || null,
-    },
   };
 }
 
@@ -3136,12 +3189,6 @@ const GithubResearchSchema = z.object({
 const FusionResearchSchema = z.object({
   topK: z.number().int().min(3).max(30).default(10),
   useLatestRuns: z.boolean().default(true),
-  pipelineRunId: z.string().min(4).max(120).optional(),
-  benchmarkRunId: z.string().min(4).max(120).optional(),
-  githubRunId: z.string().min(4).max(120).optional(),
-  redditRunId: z.string().min(4).max(120).optional(),
-  githubQuery: z.string().min(2).max(300).optional(),
-  redditQuery: z.string().min(2).max(300).optional(),
 });
 
 const ChatSchema = z.object({
@@ -3828,25 +3875,7 @@ export function createApp() {
     if (!parsed.success) return res.status(400).json({ ok: false, error: "invalid_request", details: parsed.error.flatten() });
 
     const p = parsed.data;
-    const bundle = p.useLatestRuns
-      ? getLatestResearchBundle(appState.runs)
-      : getDeterministicResearchBundle(appState.runs, p);
-    if (!p.useLatestRuns) {
-      const unresolved = [];
-      if (p.pipelineRunId && !bundle.selected?.pipelineRunId) unresolved.push("pipelineRunId");
-      if (p.benchmarkRunId && !bundle.selected?.benchmarkRunId) unresolved.push("benchmarkRunId");
-      if (p.githubRunId && !bundle.selected?.githubRunId) unresolved.push("githubRunId");
-      if (p.redditRunId && !bundle.selected?.redditRunId) unresolved.push("redditRunId");
-      if (p.githubQuery && !bundle.selected?.githubRunId) unresolved.push("githubQuery");
-      if (p.redditQuery && !bundle.selected?.redditRunId) unresolved.push("redditQuery");
-      if (unresolved.length) {
-        return res.status(400).json({
-          ok: false,
-          error: "deterministic_selector_unresolved",
-          detail: `Selectors not resolved: ${unresolved.join(", ")}`,
-        });
-      }
-    }
+    const bundle = getLatestResearchBundle(appState.runs);
     if (!bundle.benchmarkRepos.length) {
       return res.status(404).json({
         ok: false,
@@ -3890,7 +3919,6 @@ export function createApp() {
         benchmark_count: bundle.benchmarkRepos.length,
         has_github: Boolean(bundle.githubReport),
         has_reddit: Boolean(bundle.redditReport),
-        selected: bundle.selected || null,
       },
     });
   });
@@ -4030,8 +4058,6 @@ export function createApp() {
     const stageResults = [];
     let githubReport = null;
     let redditReport = null;
-    let effectiveGithubQuery = null;
-    let effectiveRedditQuery = null;
 
     const scoutPayload = {
       queries: p.queries,
@@ -4180,7 +4206,6 @@ export function createApp() {
         maxResults: Number(p?.github?.maxResults || 40),
       });
       try {
-        effectiveGithubQuery = githubQuery;
         githubReport = getHybridCache(PIPELINE_GITHUB_CACHE, githubCacheKey, "github_research", githubQuery);
         let cached = true;
         if (!githubReport) {
@@ -4230,7 +4255,6 @@ export function createApp() {
             maxResults: 24,
           });
           setHybridCache(PIPELINE_GITHUB_CACHE, fallbackKey, "github_research", fallbackQuery, githubReport);
-          effectiveGithubQuery = fallbackQuery;
           if (indexStore?.enabled) {
             indexStore.saveGithubEvidence({ query: fallbackQuery, report: githubReport });
             indexStore.refreshRepos({
@@ -4287,7 +4311,6 @@ export function createApp() {
         maxResults: Number(p?.reddit?.maxResults || 60),
       });
       try {
-        effectiveRedditQuery = redditQuery;
         redditReport = getHybridCache(PIPELINE_REDDIT_CACHE, redditCacheKey, "reddit_research", redditQuery);
         let cached = true;
         if (!redditReport) {
@@ -4399,10 +4422,6 @@ export function createApp() {
       output: {
         ok,
         stageResults,
-          researchInputs: {
-            githubQuery: effectiveGithubQuery,
-            redditQuery: effectiveRedditQuery,
-          },
         scout: scoutRepos,
         benchmark: benchmarkRanked,
         github: githubReport,
@@ -4422,8 +4441,8 @@ export function createApp() {
         stage: "pipeline_fusion",
         repos: Array.isArray(fusion?.leaderboard) ? fusion.leaderboard : [],
       });
-      if (githubReport) indexStore.saveGithubEvidence({ query: effectiveGithubQuery || p.userGoal, report: githubReport });
-      if (redditReport) indexStore.saveRedditEvidence({ query: effectiveRedditQuery || p.userGoal, report: redditReport });
+      if (githubReport) indexStore.saveGithubEvidence({ query: p.userGoal, report: githubReport });
+      if (redditReport) indexStore.saveRedditEvidence({ query: p.userGoal, report: redditReport });
     }
     trimHistory();
     persistDataStore();
@@ -4432,10 +4451,6 @@ export function createApp() {
       ok,
       runId,
       stageResults,
-      researchInputs: {
-        githubQuery: effectiveGithubQuery,
-        redditQuery: effectiveRedditQuery,
-      },
       scout: scoutRepos,
       benchmark: benchmarkRanked,
       github: githubReport,
@@ -4524,31 +4539,29 @@ export function createApp() {
       setCache(MAGIC_RUN_BENCH_CACHE, benchCacheKey, benchmark);
     }
 
+    let githubReport = null;
+    let redditReport = null;
+    let last30daysReport = null;
     const magicInput = {
       productName: p.productName,
       userGoal: p.userGoal,
       queries,
     };
-    let githubReport = null;
-    let redditReport = null;
-    const effectiveGithubQuery = buildScopedGithubQuery(magicInput, 220);
-    const effectiveRedditQuery = buildScopedGithubQuery({
-      ...magicInput,
-      queries: [...queries, "builder", "workflow"],
-    }, 220);
-    try {
-      githubReport = await doGithubResearch({
-        query: effectiveGithubQuery,
+
+    // Run GitHub, Reddit, and last30days research in PARALLEL
+    const depthMap = { fast: "quick", standard: "standard", deep: "deep" };
+    const [ghResult, rdResult, l30dResult] = await Promise.allSettled([
+      doGithubResearch({
+        query: buildScopedGithubQuery(magicInput, 220),
         perPage: 20,
         maxResults: timeoutTierConfig.maxResults,
         githubToken: GITHUB_TOKEN,
-      });
-    } catch {
-      githubReport = null;
-    }
-    try {
-      redditReport = await doRedditResearch({
-        query: effectiveRedditQuery,
+      }),
+      doRedditResearch({
+        query: buildScopedGithubQuery({
+          ...magicInput,
+          queries: [...queries, "builder", "workflow"],
+        }, 220),
         subreddits: selectIntentSubreddits(magicInput, REDDIT_DEFAULT_SUBREDDITS),
         limitPerSubreddit: timeoutTierConfig.redditLimit,
         timeWindow: "year",
@@ -4556,15 +4569,30 @@ export function createApp() {
         redditUserAgent: REDDIT_USER_AGENT,
         redditAuthProfiles,
         redditRequestTimeoutMs: REDDIT_REQUEST_TIMEOUT_MS,
-      });
-    } catch {
-      redditReport = null;
-    }
+      }),
+      LAST30DAYS_ENABLED
+        ? runLast30DaysResearch({
+            topic: `${p.productName} ${p.userGoal}`.slice(0, 120),
+            depth: depthMap[p.timeoutTier] || "quick",
+            days: 30,
+            timeoutMs: 180_000, // 3 min cap (runs in parallel, shouldn't block)
+          })
+        : Promise.resolve(null),
+    ]);
+
+    githubReport = ghResult.status === "fulfilled" ? ghResult.value : null;
+    redditReport = rdResult.status === "fulfilled" ? rdResult.value : null;
+    last30daysReport = l30dResult.status === "fulfilled" ? l30dResult.value : null;
+
+    // Build term weights from last30days for the fusion leaderboard
+    const { termWeights: last30daysTermWeights, topInsights: last30daysInsights } =
+      buildLast30DaysTermWeights(last30daysReport);
 
     const fusion = buildFusionLeaderboard({
       benchmarkRepos: benchmark,
       githubReport,
       redditReport,
+      last30daysTermWeights,
       topK: 10,
     });
 
@@ -4573,7 +4601,7 @@ export function createApp() {
         ? fusion.leaderboard.map((x) => ({ full_name: x.full_name, benchmarkScore: x.fusionScore }))
         : benchmark
     ).slice(0, 6);
-    const evidence = buildEvidencePack({ githubReport, redditReport, fusion });
+    const evidence = buildEvidencePack({ githubReport, redditReport, fusion, last30daysReport });
     const decisionCitations = buildDecisionCitations({ selectedRepos, evidence });
 
     const baseBlueprint = buildExecutableBlueprint({
@@ -4582,10 +4610,6 @@ export function createApp() {
       stack: p.stack,
       selectedRepos,
       evidence,
-      researchInputs: {
-        githubQuery: effectiveGithubQuery,
-        redditQuery: effectiveRedditQuery,
-      },
       constraints: p.constraints,
     });
     baseBlueprint.decisionCitations = decisionCitations;
@@ -4694,6 +4718,23 @@ export function createApp() {
         latestPlanHash: updatedMemory.latestPlanHash,
         decisionCount: updatedMemory.decisions.length,
       },
+      last30days: last30daysReport ? {
+        topic: last30daysReport.topic,
+        summary: last30daysReport.summary,
+        top_voices: last30daysReport.top_voices,
+        insights: last30daysInsights,
+        markets: (last30daysReport.markets || []).slice(0, 5),
+      } : null,
+      // ── Cost & performance tracking (community research: budget awareness) ──
+      costMetrics: {
+        totalDurationMs: Date.now() - startedMs,
+        researchRetries: last30daysReport?._meta?.attempts || 0,
+        researchDurationMs: last30daysReport?._meta?.durationMs || 0,
+        researchCacheHit: last30daysReport?._meta?.cacheHit || false,
+        sourcesQueried: ['github', 'reddit', 'last30days'].filter(
+          (s) => s === 'github' ? !!githubReport : s === 'reddit' ? !!redditReport : !!last30daysReport
+        ),
+      },
       markdownPlan: [
         `# ${p.productName} - Magic Run Plan`,
         "",
@@ -4704,6 +4745,14 @@ export function createApp() {
         "## Top Repos",
         ...selectedRepos.map((r) => `- ${r.full_name} (${Number(r.benchmarkScore || 0).toFixed(2)})`),
         "",
+        ...(last30daysInsights.length ? [
+          "## Real-Time Community Intelligence (last 30 days)",
+          ...last30daysInsights.map((i) => `- ${i}`),
+          ...(last30daysReport?.summary ? [
+            `- Sources: ${last30daysReport.summary.reddit_count || 0} Reddit, ${last30daysReport.summary.x_count || 0} X, ${last30daysReport.summary.youtube_count || 0} YouTube, ${last30daysReport.summary.hn_count || 0} HN, ${last30daysReport.summary.web_count || 0} Web`,
+          ] : []),
+          "",
+        ] : []),
         "## Execution Tasks",
         ...executionBridge.tasks.map((t) => `- [P${t.priority}] ${t.owner}: ${t.title}`),
       ].join("\n"),
@@ -4726,8 +4775,12 @@ export function createApp() {
         stage: "magic_fusion",
         repos: Array.isArray(fusion?.leaderboard) ? fusion.leaderboard : [],
       });
-      if (githubReport) indexStore.saveGithubEvidence({ query: effectiveGithubQuery || p.userGoal, report: githubReport });
-      if (redditReport) indexStore.saveRedditEvidence({ query: effectiveRedditQuery || p.userGoal, report: redditReport });
+      if (githubReport) indexStore.saveGithubEvidence({ query: p.userGoal, report: githubReport });
+      if (redditReport) indexStore.saveRedditEvidence({ query: p.userGoal, report: redditReport });
+      if (last30daysReport) indexStore.saveLast30DaysEvidence({
+        query: p.userGoal,
+        items: extractLast30DaysEvidence(last30daysReport, 20),
+      });
       indexStore.upsertProjectMemory({ projectKey, memory: updatedMemory });
     }
     trimHistory();
@@ -4808,19 +4861,13 @@ export function createApp() {
 
     let githubReport = null;
     let redditReport = null;
-    const effectiveGithubQuery = buildScopedGithubQuery({
-      productName: p.productName,
-      userGoal: p.userGoal,
-      queries: [...discoveryQueries, "playwright", "lighthouse", "axe-core", "contract testing"],
-    }, 220);
-    const effectiveRedditQuery = buildScopedGithubQuery({
-      productName: p.productName,
-      userGoal: p.userGoal,
-      queries: [...discoveryQueries, "user friction", "conversion"],
-    }, 220);
     try {
       githubReport = await doGithubResearch({
-        query: effectiveGithubQuery,
+        query: buildScopedGithubQuery({
+          productName: p.productName,
+          userGoal: p.userGoal,
+          queries: [...discoveryQueries, "playwright", "lighthouse", "axe-core", "contract testing"],
+        }, 220),
         perPage: 20,
         maxResults: timeoutTierConfig.maxResults,
         githubToken: GITHUB_TOKEN,
@@ -4830,7 +4877,11 @@ export function createApp() {
     }
     try {
       redditReport = await doRedditResearch({
-        query: effectiveRedditQuery,
+        query: buildScopedGithubQuery({
+          productName: p.productName,
+          userGoal: p.userGoal,
+          queries: [...discoveryQueries, "user friction", "conversion"],
+        }, 220),
         subreddits: selectIntentSubreddits({
           productName: p.productName,
           userGoal: p.userGoal,
@@ -4871,10 +4922,6 @@ export function createApp() {
     const decisionCitations = buildDecisionCitations({
       selectedRepos: exemplars.map((x) => ({ full_name: x.full_name, benchmarkScore: x.score })),
       evidence,
-      researchInputs: {
-        githubQuery: effectiveGithubQuery,
-        redditQuery: effectiveRedditQuery,
-      },
     });
     const coverage = buildRepoCoverage(p.focusRepos);
     const avgExemplarScore = exemplars.length
@@ -4969,8 +5016,8 @@ export function createApp() {
         stage: "finishing_fusion",
         repos: Array.isArray(fusion?.leaderboard) ? fusion.leaderboard : [],
       });
-      if (githubReport) indexStore.saveGithubEvidence({ query: effectiveGithubQuery || p.userGoal, report: githubReport });
-      if (redditReport) indexStore.saveRedditEvidence({ query: effectiveRedditQuery || p.userGoal, report: redditReport });
+      if (githubReport) indexStore.saveGithubEvidence({ query: p.userGoal, report: githubReport });
+      if (redditReport) indexStore.saveRedditEvidence({ query: p.userGoal, report: redditReport });
     }
     trimHistory();
     persistDataStore();

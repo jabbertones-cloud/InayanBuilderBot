@@ -130,6 +130,20 @@ export function createSqliteIndexStore({
     CREATE INDEX IF NOT EXISTS idx_evidence_github_query ON evidence_github(query);
     CREATE INDEX IF NOT EXISTS idx_evidence_reddit_query ON evidence_reddit(query);
     CREATE INDEX IF NOT EXISTS idx_query_cache_source ON query_cache(source);
+
+    CREATE TABLE IF NOT EXISTS evidence_last30days (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      query TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'unknown',
+      title TEXT NOT NULL,
+      url TEXT NOT NULL DEFAULT '',
+      snippet TEXT NOT NULL DEFAULT '',
+      score REAL NOT NULL DEFAULT 0,
+      handle TEXT,
+      captured_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_evidence_last30days_query ON evidence_last30days(query);
   `);
 
   const upsertRepoStmt = db.prepare(`
@@ -186,6 +200,14 @@ export function createSqliteIndexStore({
       rejected_options_json = excluded.rejected_options_json,
       hard_constraints_json = excluded.hard_constraints_json,
       updated_at = excluded.updated_at;
+  `);
+
+  const insertLast30DaysEvidenceStmt = db.prepare(`
+    INSERT INTO evidence_last30days (
+      query, source, title, url, snippet, score, handle, captured_at
+    ) VALUES (
+      @query, @source, @title, @url, @snippet, @score, @handle, @captured_at
+    );
   `);
 
   const upsertQueryCacheStmt = db.prepare(`
@@ -261,6 +283,22 @@ export function createSqliteIndexStore({
     }
   });
 
+  const txInsertLast30DaysEvidence = db.transaction((query, items) => {
+    const capturedAt = nowIso();
+    for (const row of Array.isArray(items) ? items : []) {
+      insertLast30DaysEvidenceStmt.run({
+        query: String(query || ""),
+        source: String(row?.source || "unknown"),
+        title: String(row?.title || "").slice(0, 300),
+        url: String(row?.url || ""),
+        snippet: String(row?.snippet || "").slice(0, 1200),
+        score: Number(row?.score || 0) || 0,
+        handle: row?.handle ? String(row.handle).slice(0, 120) : null,
+        captured_at: capturedAt,
+      });
+    }
+  });
+
   const txInsertRedditEvidence = db.transaction((query, posts) => {
     const capturedAt = nowIso();
     for (const row of Array.isArray(posts) ? posts : []) {
@@ -305,6 +343,9 @@ export function createSqliteIndexStore({
     },
     saveRedditEvidence({ query, report } = {}) {
       txInsertRedditEvidence(String(query || ""), report?.posts || report?.results || []);
+    },
+    saveLast30DaysEvidence({ query, items } = {}) {
+      txInsertLast30DaysEvidence(String(query || ""), Array.isArray(items) ? items : []);
     },
     upsertProjectMemory({ projectKey, memory } = {}) {
       if (!projectKey) return;
@@ -372,7 +413,14 @@ export function createSqliteIndexStore({
         ORDER BY captured_at DESC
         LIMIT @limit
       `).all({ like, limit: max });
-      return { repos, githubEvidence, redditEvidence };
+      const last30daysEvidence = db.prepare(`
+        SELECT query, source, title, url, snippet, score, handle, captured_at
+        FROM evidence_last30days
+        WHERE lower(query) LIKE @like OR lower(title) LIKE @like OR lower(snippet) LIKE @like
+        ORDER BY captured_at DESC
+        LIMIT @limit
+      `).all({ like, limit: max });
+      return { repos, githubEvidence, redditEvidence, last30daysEvidence };
     },
     stats() {
       const counts = {
@@ -380,6 +428,7 @@ export function createSqliteIndexStore({
         snapshots: db.prepare("SELECT COUNT(*) as c FROM repo_snapshots").get().c || 0,
         githubEvidence: db.prepare("SELECT COUNT(*) as c FROM evidence_github").get().c || 0,
         redditEvidence: db.prepare("SELECT COUNT(*) as c FROM evidence_reddit").get().c || 0,
+        last30daysEvidence: db.prepare("SELECT COUNT(*) as c FROM evidence_last30days").get().c || 0,
         projectMemory: db.prepare("SELECT COUNT(*) as c FROM project_memory").get().c || 0,
         queryCache: db.prepare("SELECT COUNT(*) as c FROM query_cache").get().c || 0,
       };
