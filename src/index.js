@@ -5446,3 +5446,6 @@ export function startServer(port = DEFAULT_PORT) {
 if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
   startServer(DEFAULT_PORT);
 }
+
+/** Used by scripts/research-cli.mjs for claw-architect inayan-research-runner integration. */
+export { runGithubResearch, runRedditResearch };
