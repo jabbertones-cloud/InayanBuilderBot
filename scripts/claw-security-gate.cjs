@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 "use strict";
-// claw-security-gate v3 — line-level context check for false positives
+// claw-security-gate v4 — adds placeholder-suffix check (sk_live_xxx, _yyy, etc.)
 // Grounded fix per NotebookLM (openclaw-core notebook, citations 231bf78e + 642f27a0).
 //
 // v2 retained: widened path exceptions + per-repo allowlist
@@ -37,8 +37,14 @@ const PATH_EXCEPTION = /(\.example|\.sample|dummy|placeholder|test-fixtures|\.te
 
 const SECRET_RE = /(api[_-]?key\s*[=:]\s*['\"][A-Za-z0-9_\-]{16,}|sk_live_[A-Za-z0-9]+|-----BEGIN (RSA|EC|OPENSSH) PRIVATE KEY-----|GOOGLE_OAUTH_CLIENT_SECRET\s*=\s*.+)/i;
 
-// H1: same-line context tokens that signal "this is not a real secret"
-const LINE_CONTEXT_TOKENS = /\b(placeholder|example|demo|default(?:Value)?|fake|mock|dummy|sample|your[_-]?key[_-]?here|YOUR_[A-Z_]+|<[a-zA-Z0-9_-]+>|xxx+|aaa+)\b/i;
+// H1: same-line context tokens that signal "this is not a real secret".
+// Note: no leading/trailing \b on xxx+/aaa+/yyy+ so they match in patterns
+// like sk_live_xxx where the underscore is a word char.
+const LINE_CONTEXT_TOKENS = /(\b(placeholder|example|demo|default(?:Value)?|fake|mock|dummy|sample|your[_-]?key[_-]?here|YOUR_[A-Z_]+)\b|<[a-zA-Z0-9_-]+>|xxx+|yyy+|aaa+|REPLACE_?ME)/i;
+
+// H4 (v4): explicit placeholder-suffix check on the matched secret value itself
+// catches sk_live_xxx, sk_live_REAL_SECRET_HERE, sk_live_REPLACE_ME, etc.
+const PLACEHOLDER_VALUE_RE = /(sk_live|sk_test|api[_-]?key[=:]\s*['"]?)[A-Za-z0-9_\-]*?(_xxx+|_yyy+|_aaa+|_REAL|_PLACEHOLDER|_REPLACE|_HERE|_FAKE|_DEMO)/i;
 
 // H2: property-name immediately preceding the match
 const PROPERTY_PRECEDES_RE = /(placeholder|example|default(?:Value)?|description|comment|hint)\s*:/i;
@@ -73,6 +79,7 @@ for (const f of files) {
     if (LINE_CONTEXT_TOKENS.test(window)) continue;
     if (PROPERTY_PRECEDES_RE.test(lines[i])) continue;
     if (isSentinelValue(lines[i])) continue;
+    if (PLACEHOLDER_VALUE_RE.test(lines[i])) continue; // v4: suffix-style placeholders
     realMatchFound = true;
     break;
   }
@@ -85,4 +92,4 @@ if (risky.length) {
   console.error("\nTo silence a known-safe match, add the path to .claw-security-gate-allow at repo root.");
   process.exit(1);
 }
-console.log("security gate pass (v3: widened exceptions + line-context heuristics + per-repo allowlist)");
+console.log("security gate pass (v4: widened exceptions + line-context heuristics + placeholder-suffix + per-repo allowlist)");
