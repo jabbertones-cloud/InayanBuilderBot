@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 "use strict";
-// claw-security-gate v2 — widened exceptions + per-repo allowlist
-// Grounded fix per NotebookLM (openclaw-core notebook, citations 642f27a0).
+// claw-security-gate v3 — line-level context check for false positives
+// Grounded fix per NotebookLM (openclaw-core notebook, citations 231bf78e + 642f27a0).
 //
-// Changes from v1:
-//   - exception regex now covers .test.|.spec.|__tests__|/tests?/|/examples?/|/docs?/
-//   - explicitly excludes .github/workflows/ (those use ${{ secrets.X }} syntax)
-//   - reads .claw-security-gate-allow at repo root for per-repo opt-out
-//   - file matches: glob-prefix style (each line is a path prefix to ignore)
+// v2 retained: widened path exceptions + per-repo allowlist
+// v3 adds: line-level context check (skip if line context indicates placeholder/sentinel)
+//   - Same-line tokens: placeholder, example, demo, default, fake, mock, dummy, sample
+//   - Property-name preceding match: placeholder:, example:, default:, defaultValue:
+//   - Sentinel values: kebab-case English words (e.g. 'uses-own-credentials')
 
 const fs = require("fs");
 const path = require("path");
@@ -26,7 +26,6 @@ while (stack.length) {
   }
 }
 
-// Per-repo allowlist (optional)
 let allowList = [];
 const allowPath = path.join(root, ".claw-security-gate-allow");
 if (fs.existsSync(allowPath)) {
@@ -34,20 +33,50 @@ if (fs.existsSync(allowPath)) {
     .split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
 }
 
-// Widened exception (path-based)
-const EXCEPTION = /(\.example|\.sample|dummy|placeholder|test-fixtures|\.test\.|\.spec\.|__tests__|\/tests?\/|\/examples?\/|\/docs?\/|^\.github\/workflows\/|\/\.github\/workflows\/)/i;
+const PATH_EXCEPTION = /(\.example|\.sample|dummy|placeholder|test-fixtures|\.test\.|\.spec\.|__tests__|\/tests?\/|\/examples?\/|\/docs?\/|^\.github\/workflows\/|\/\.github\/workflows\/)/i;
 
-const re = /(api[_-]?key\s*[=:]\s*['\"][A-Za-z0-9_\-]{16,}|sk_live_[A-Za-z0-9]+|-----BEGIN (RSA|EC|OPENSSH) PRIVATE KEY-----|GOOGLE_OAUTH_CLIENT_SECRET\s*=\s*.+)/i;
+const SECRET_RE = /(api[_-]?key\s*[=:]\s*['\"][A-Za-z0-9_\-]{16,}|sk_live_[A-Za-z0-9]+|-----BEGIN (RSA|EC|OPENSSH) PRIVATE KEY-----|GOOGLE_OAUTH_CLIENT_SECRET\s*=\s*.+)/i;
+
+// H1: same-line context tokens that signal "this is not a real secret"
+const LINE_CONTEXT_TOKENS = /\b(placeholder|example|demo|default(?:Value)?|fake|mock|dummy|sample|your[_-]?key[_-]?here|YOUR_[A-Z_]+|<[a-zA-Z0-9_-]+>|xxx+|aaa+)\b/i;
+
+// H2: property-name immediately preceding the match
+const PROPERTY_PRECEDES_RE = /(placeholder|example|default(?:Value)?|description|comment|hint)\s*:/i;
+
+// H3: matched value contains kebab-case English (sentinel pattern)
+const SENTINEL_KEBAB_RE = /['\"]([a-z]+-[a-z]+(?:-[a-z]+)+)['\"]/;
+const isSentinelValue = (line) => {
+  const m = line.match(SENTINEL_KEBAB_RE);
+  if (!m) return false;
+  const v = m[1];
+  // Looks like English: at least 2 segments that are >= 3 chars
+  const segs = v.split("-");
+  return segs.length >= 2 && segs.every((s) => /^[a-z]{3,}$/.test(s));
+};
 
 const risky = [];
 for (const f of files) {
   const rel = f.replace(root + path.sep, "");
-  if (EXCEPTION.test(rel)) continue;
+  if (PATH_EXCEPTION.test(rel)) continue;
   if (allowList.some((a) => rel === a || rel.startsWith(a))) continue;
+
   const txt = fs.readFileSync(f, "utf8");
-  if (re.test(txt)) {
-    risky.push(rel);
+  if (!SECRET_RE.test(txt)) continue;
+
+  // line-level analysis: only flag lines where SECRET_RE matches AND none of H1/H2/H3 fire
+  const lines = txt.split("\n");
+  let realMatchFound = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (!SECRET_RE.test(lines[i])) continue;
+    // Build a 3-line window for context check
+    const window = (lines[i - 1] || "") + " | " + lines[i] + " | " + (lines[i + 1] || "");
+    if (LINE_CONTEXT_TOKENS.test(window)) continue;
+    if (PROPERTY_PRECEDES_RE.test(lines[i])) continue;
+    if (isSentinelValue(lines[i])) continue;
+    realMatchFound = true;
+    break;
   }
+  if (realMatchFound) risky.push(rel);
 }
 
 if (risky.length) {
@@ -56,4 +85,4 @@ if (risky.length) {
   console.error("\nTo silence a known-safe match, add the path to .claw-security-gate-allow at repo root.");
   process.exit(1);
 }
-console.log("security gate pass (v2: widened exceptions + per-repo allowlist)");
+console.log("security gate pass (v3: widened exceptions + line-context heuristics + per-repo allowlist)");
