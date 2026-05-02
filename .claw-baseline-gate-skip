@@ -1,0 +1,2 @@
+# This repo opts out of claw-baseline-gate.
+# Reason: not a multi-tenant SaaS app — auth signals present but architectural pattern differs.
