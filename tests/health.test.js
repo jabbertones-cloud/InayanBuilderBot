@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -70,6 +71,50 @@ test("indexing capabilities endpoint reports builtin support", async () => {
   assert.equal(typeof body.indexing.mode, "string");
 
   server.close();
+});
+
+test("protected endpoints accept x-api-key header", async () => {
+  const originalKey = process.env.BUILDERBOT_API_KEY;
+  process.env.BUILDERBOT_API_KEY = "ibb_test_key";
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+
+  try {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/index/gap-hotspots`, {
+      headers: { "x-api-key": "ibb_test_key" },
+    });
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+  } finally {
+    server.close();
+    if (originalKey == null) {
+      delete process.env.BUILDERBOT_API_KEY;
+    } else {
+      process.env.BUILDERBOT_API_KEY = originalKey;
+    }
+  }
+});
+
+test("Inayan MCP exposes video bootstrap and defaults to app port", () => {
+  const result = spawnSync("node", ["scripts/mcp-inayan-builder-server.mjs", "--list-tools"], {
+    cwd: path.join(path.dirname(new URL(import.meta.url).pathname), ".."),
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      INAYAN_BUILDER_API_URL: "",
+      INAYAN_API_URL: "",
+    },
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  const body = JSON.parse(result.stdout);
+  assert.equal(body.baseUrl, "http://127.0.0.1:3000");
+  assert.equal(body.tools.includes("video_bootstrap"), true);
 });
 
 test("pipeline run works with seed repos and runExternal=false", async () => {
@@ -341,8 +386,104 @@ test("magic run includes Playwright-oriented E2E execution tasks", async () => {
   assert.equal(e2eTasks.length >= 1, true);
   assert.equal(e2eTasks.some((t) => (t.acceptance_criteria || []).some((c) => /planhash|qualityscore|timetofirstwowms/i.test(String(c)))), true);
   assert.equal(tasks.some((t) => /contract parity/i.test(String(t?.title || ""))), true);
+  assert.equal(Array.isArray(body.costMetrics?.sourcesQueried), true);
+  assert.equal(body.costMetrics.sourcesQueried.includes("last30days"), false);
 
-  server.close();
+  await new Promise((resolve) => server.close(resolve));
+});
+
+test("magic run honors deployment architecture and reports evidence coverage", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+
+  try {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/masterpiece/magic-run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        productName: "Cloudflare Evidence Engine",
+        userGoal: "Build evidence-driven maintenance for Cloudflare Workers. Do not use Vercel or Replit.",
+        stack: ["TypeScript", "Cloudflare Workers", "GitHub Research MCP"],
+        constraints: { budgetUsd: 0, deadlineDays: 7, teamSize: 1 },
+        timeoutTier: "fast",
+        deterministic: true,
+      }),
+    });
+    const body = await response.json();
+    assert.equal(response.status, 200);
+
+    const planText = JSON.stringify({
+      executable: body.blueprint?.executable,
+      tasks: body.executionBridge?.tasks,
+    });
+    assert.equal(/vercel|replit/i.test(planText), false);
+    assert.equal(/cloudflare/i.test(planText), true);
+    assert.equal(body.blueprint?.architectureConstraints?.deploymentTarget, "cloudflare");
+    assert.deepEqual(
+      body.blueprint?.architectureConstraints?.explicitlyForbidden?.sort(),
+      ["replit", "vercel"]
+    );
+    assert.equal(typeof body.evidenceCoverage?.score, "number");
+    assert.equal(Array.isArray(body.evidenceCoverage?.missingSources), true);
+    assert.equal(body.evidenceCoverage.missingSources.includes("github"), true);
+    assert.equal(body.evidenceCoverage?.sufficient, false);
+    assert.equal(body.evaluation?.evidencePass, false);
+    assert.equal(body.evaluation?.pass, false);
+    assert.equal(body.executionBridge?.executionReady, false);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test("magic run emits Inayan GHL 7-day sash nurture migration plan", async () => {
+  const app = createApp();
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once("listening", resolve));
+
+  try {
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+
+    const response = await fetch(`http://127.0.0.1:${port}/api/v1/masterpiece/magic-run`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        productName: "Inayan Kajabi to GHL Migration",
+        userGoal: "Replace Kajabi offer URL with GHL Communities membership URL and build the 7-day sash-progression nurture sequence.",
+        stack: ["Node.js", "Express", "GoHighLevel"],
+        constraints: {
+          budgetUsd: 600,
+          deadlineDays: 7,
+          teamSize: 1,
+        },
+        timeoutTier: "fast",
+        deterministic: true,
+      }),
+    });
+
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+
+    const executable = body.blueprint?.executable || {};
+    const allPlanText = [
+      ...(executable.filePlan || []).map((x) => `${x.path} ${x.purpose}`),
+      ...(executable.testPlan || []),
+      ...(executable.rollout || []),
+    ].join("\n");
+
+    assert.match(allPlanText, /GHL Communities membership URL/i);
+    assert.match(allPlanText, /7-day sash-progression nurture sequence/i);
+    assert.match(allPlanText, /\{\{contact\.first_name\}\}/);
+    assert.match(allPlanText, /\$600 \+ \$59/);
+    assert.doesNotMatch(allPlanText, /kajabi\.com|mykajabi|kajabi offer url/i);
+    assert.equal((allPlanText.match(/Day [1-7]:/g) || []).length, 7);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
 });
 
 test("repo contract gap endpoint detects missing backend routes and alias mismatches", async () => {
@@ -444,9 +585,11 @@ test("reddit search endpoint returns ranked results", async () => {
 
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);
+    assert.equal(body.untrusted, true);
     assert.equal(typeof body.runId, "string");
     assert.equal(Array.isArray(body.results), true);
     assert.equal(body.results.length, 1);
+    assert.equal(body.results[0].untrusted, true);
     assert.equal(body.results[0].subreddit, "AI_Agents");
     assert.equal(Number(body.results[0].rank_score) > 0, true);
   } finally {

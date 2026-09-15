@@ -52,6 +52,7 @@ const LAST30DAYS_ENABLED = process.env.LAST30DAYS_ENABLED !== "false"; // enable
 const MAGIC_RUN_CACHE_TTL_MS = Number(process.env.MAGIC_RUN_CACHE_TTL_MS || 10 * 60 * 1000);
 const MAGIC_RUN_MAX_BUDGET_USD = Number(process.env.MAGIC_RUN_MAX_BUDGET_USD || 25000);
 const GAP_HOTSPOT_TTL_MS = Number(process.env.GAP_HOTSPOT_TTL_MS || 5 * 60 * 1000);
+const CSP_REPORT_ONLY = process.env.CSP_REPORT_ONLY !== "false";
 const DEFAULT_GAP_HOTSPOTS = {
   generatedAt: new Date().toISOString(),
   source: "builtin_default",
@@ -378,6 +379,13 @@ function parseEnvText(text) {
   return out;
 }
 
+function loadEnvFileIntoProcess() {
+  const envFromFile = parseEnvText(readEnvFileSafe());
+  for (const [key, value] of Object.entries(envFromFile)) {
+    if (!(key in process.env)) process.env[key] = value;
+  }
+}
+
 function readEnvFileSafe() {
   try {
     return fs.readFileSync(envFile, "utf8");
@@ -448,6 +456,41 @@ function deterministicRepoSort(repos) {
   });
 }
 
+function detectArchitectureConstraints({ stack, userGoal }) {
+  const text = `${(stack || []).join(" ")} ${userGoal || ""}`.toLowerCase();
+  const forbiddenClauses = [...text.matchAll(
+    /(?:do not use|don't use|no|without)\s+([^.!;]+)/gi
+  )].map((match) => match[1]);
+  const explicitlyForbidden = ["vercel", "replit", "netlify", "aws"]
+    .filter((target) => forbiddenClauses.some((clause) => new RegExp(`\\b${target}\\b`, "i").test(clause)));
+  let deploymentTarget = "unspecified";
+  if (/cloudflare|workers|wrangler/.test(text)) deploymentTarget = "cloudflare";
+  else if (/\bvercel\b/.test(text) && !explicitlyForbidden.includes("vercel")) deploymentTarget = "vercel";
+  else if (/\breplit\b/.test(text) && !explicitlyForbidden.includes("replit")) deploymentTarget = "replit";
+  return { deploymentTarget, explicitlyForbidden };
+}
+
+function buildEvidenceCoverage(evidence) {
+  const counts = {
+    github: evidence?.github?.length || 0,
+    reddit: evidence?.reddit?.length || 0,
+    last30days: evidence?.last30days?.length || 0,
+    benchmark: evidence?.fusion?.length || 0,
+  };
+  const missingSources = Object.entries(counts).filter(([, count]) => count === 0).map(([source]) => source);
+  const score = Object.values(counts).filter((count) => count > 0).length / Object.keys(counts).length;
+  const independentSourceCount = [counts.github, counts.reddit, counts.last30days]
+    .filter((count) => count > 0).length;
+  const sufficient = independentSourceCount >= 2;
+  return {
+    counts,
+    missingSources,
+    independentSourceCount,
+    sufficient,
+    score: Math.round(score * 1000) / 1000,
+  };
+}
+
 function buildEvidencePack({ githubReport, redditReport, fusion, last30daysReport, top = 8 }) {
   return {
     github: Array.isArray(githubReport?.answers)
@@ -489,6 +532,25 @@ function buildEvidencePack({ githubReport, redditReport, fusion, last30daysRepor
   };
 }
 
+const INAYAN_GHL_SASH_SEQUENCE = [
+  "Day 1: White sash welcome with {{contact.first_name}}, Facebook Messenger quick reply, and GHL Communities membership URL.",
+  "Day 2: Yellow sash foundation lesson plus $600 + $59 anchor pricing reminder.",
+  "Day 3: Orange sash stance practice and community orientation.",
+  "Day 4: Green sash partner-drill prompt with reply-based progress check.",
+  "Day 5: Blue sash lineage story and next-class call to action.",
+  "Day 6: Brown sash commitment reminder with membership access support.",
+  "Day 7: Black sash invitation to join, anchored to $600 + $59 and GHL Communities membership URL.",
+];
+
+function isInayanGhlMigrationGoal({ productName, userGoal }) {
+  const text = `${productName || ""} ${userGoal || ""}`.toLowerCase();
+  return (
+    /\binayan\b/.test(text)
+    && /\b(kajabi|ghl|gohighlevel|highlevel|communities|membership)\b/.test(text)
+    && /\b(sash|nurture|offer|migration|community)\b/.test(text)
+  );
+}
+
 function buildExecutableBlueprint({
   productName,
   userGoal,
@@ -497,6 +559,8 @@ function buildExecutableBlueprint({
   evidence,
   constraints,
 }) {
+  const architectureConstraints = detectArchitectureConstraints({ stack, userGoal });
+  const deploymentTarget = architectureConstraints.deploymentTarget;
   const assumptions = [
     "Top benchmarked repos represent feasible architecture patterns.",
     "Initial scope targets MVP shipping speed over full enterprise breadth.",
@@ -538,9 +602,12 @@ function buildExecutableBlueprint({
     { path: "src/core/planning/project-memory.ts", purpose: "Persist decisions, rejected options, constraints." },
     { path: "src/ui/plan-editor.tsx", purpose: "Interactive constraint editing + plan diffs." },
     { path: "tests/e2e/magic-run.spec.ts", purpose: "Playwright E2E coverage for deterministic magic run flow." },
-    { path: "tests/e2e/deploy-targets.spec.ts", purpose: "Playwright checks for Replit/Vercel deployment paths." },
+    { path: "tests/e2e/deployment-target.spec.ts", purpose: `Playwright checks for ${deploymentTarget} deployment constraints.` },
     { path: "playwright.config.ts", purpose: "Browser test configuration for CI and local smoke lanes." },
   ];
+  if (deploymentTarget === "cloudflare") {
+    filePlan.push({ path: "wrangler.jsonc", purpose: "Cloudflare Worker bindings, routes, and compatibility source of truth." });
+  }
 
   // Dynamically add file plan entries based on community signals
   if (communityThemes.includes("monitoring") || communityThemes.includes("observability")) {
@@ -551,6 +618,16 @@ function buildExecutableBlueprint({
   }
   if (communityThemes.includes("evaluation") || communityThemes.includes("evals")) {
     filePlan.push({ path: "src/core/evals/eval-harness.ts", purpose: "LLM evaluation harness for output quality scoring (community best practice)." });
+  }
+  if (isInayanGhlMigrationGoal({ productName, userGoal })) {
+    filePlan.push({
+      path: "config/ghl/inayan-community-offer.json",
+      purpose: "GHL Communities membership URL source of truth replacing legacy Kajabi links.",
+    });
+    filePlan.push({
+      path: "config/ghl/inayan-sash-nurture-sequence.json",
+      purpose: "7-day sash-progression nurture sequence source of truth for GHL Workflow and Messenger/email templates.",
+    });
   }
 
   const apiContracts = [
@@ -572,7 +649,7 @@ function buildExecutableBlueprint({
     "Execution bridge: generated tasks include owner, priority, acceptance criteria.",
     "Memory continuity: prior decisions are loaded into next recompile.",
     "Playwright E2E: magic-run UI flow validates proof metrics and task export payloads.",
-    "Playwright E2E: deployment split checks enforce Replit/Vercel route expectations.",
+    `Playwright E2E: deployment checks enforce ${deploymentTarget} route and runtime expectations.`,
   ];
 
   // Add community-informed test requirements
@@ -585,6 +662,11 @@ function buildExecutableBlueprint({
   if (communityThemes.includes("security") || communityThemes.includes("injection")) {
     testPlan.push("Community-flagged: Prompt injection resistance tests on all LLM-facing endpoints.");
   }
+  if (isInayanGhlMigrationGoal({ productName, userGoal })) {
+    testPlan.push("GHL migration: assert every offer CTA uses the GHL Communities membership URL and contains no legacy Kajabi links.");
+    testPlan.push("GHL migration: assert Messenger and email copy use {{contact.first_name}} and preserve $600 + $59 anchor pricing exactly.");
+    testPlan.push("GHL migration: assert the 7-day sash-progression nurture sequence contains Day 1 through Day 7 in order.");
+  }
 
   const rollout = [
     "Feature flag MAGIC_RUN_V2=true for internal dogfood.",
@@ -592,6 +674,9 @@ function buildExecutableBlueprint({
     "Promote to 100% once median run latency and quality thresholds are met.",
     "Keep rollback path to legacy /api/v1/masterpiece/pipeline/run.",
   ];
+  if (deploymentTarget === "cloudflare") {
+    rollout.push("Deploy through Wrangler/OpenNext and verify active Cloudflare Worker version, routes, and production probes.");
+  }
 
   // Add community voice attribution to rollout strategy
   if (l30dVoices.length > 0) {
@@ -599,12 +684,17 @@ function buildExecutableBlueprint({
       `Monitor community channels (top voices: ${l30dVoices.slice(0, 3).join(", ")}) for adoption feedback during rollout.`
     );
   }
+  if (isInayanGhlMigrationGoal({ productName, userGoal })) {
+    rollout.push("Publish GHL Communities membership URL only after course migration signs off; keep Kajabi links blocked from outbound copy.");
+    rollout.push(...INAYAN_GHL_SASH_SEQUENCE);
+  }
 
   return {
     productName,
     objective: userGoal,
     stack,
     constraints,
+    architectureConstraints,
     selectedRepos: deterministicRepoSort(selectedRepos).slice(0, 8),
     confidence: Math.round(confidence * 1000) / 1000,
     assumptions,
@@ -667,6 +757,8 @@ function extractCommunityThemes(last30daysItems) {
 
 function evaluateBlueprint(blueprint) {
   const executable = blueprint?.executable || {};
+  const evidenceCoverage = buildEvidenceCoverage(blueprint?.evidence || {});
+  const populatedEvidenceSources = Object.values(evidenceCoverage.counts).filter((count) => count > 0).length;
   const hasContractParity =
     (executable.testPlan || []).some((x) => /contract parity|route contract|api contract/i.test(String(x)))
     || (executable.filePlan || []).some((x) => /contract-parity|contract parity/i.test(String(x?.path || x?.purpose || "")));
@@ -677,16 +769,20 @@ function evaluateBlueprint(blueprint) {
     costTime: Array.isArray(blueprint?.selectedRepos) && blueprint.selectedRepos.length >= 3 ? 0.74 : 0.45,
     dependencyCompleteness: executable.dbMigrations?.length && executable.testPlan?.length ? 0.81 : 0.46,
     contractParity: hasContractParity ? 0.82 : 0.35,
+    evidenceQuality: populatedEvidenceSources >= 2 ? 0.82 : populatedEvidenceSources === 1 ? 0.6 : 0.3,
   };
   const avg = Object.values(scores).reduce((a, b) => a + b, 0) / Object.values(scores).length;
   return {
     scores,
     score: Math.round(avg * 1000) / 1000,
-    pass: avg >= 0.72,
+    evidencePass: evidenceCoverage.sufficient,
+    pass: avg >= 0.72 && evidenceCoverage.sufficient,
   };
 }
 
 function buildExecutionBridge(blueprint) {
+  const deploymentTarget = blueprint?.architectureConstraints?.deploymentTarget || "configured";
+  const evidenceCoverage = buildEvidenceCoverage(blueprint?.evidence || {});
   const tasks = [
     {
       priority: 1,
@@ -760,18 +856,22 @@ function buildExecutionBridge(blueprint) {
     {
       priority: 5,
       owner: "qa",
-      title: "Add deployment-target E2E coverage for Replit and Vercel flows",
+      title: `Add deployment-target E2E coverage for ${deploymentTarget}`,
       estimateHours: 4,
       dependencies: [
         "Add Playwright E2E suite for magic-run + recompile",
       ],
       acceptance_criteria: [
-        "tests/e2e/deploy-targets.spec.ts validates Replit workflow command and Vercel API route contract.",
+        `tests/e2e/deployment-target.spec.ts validates ${deploymentTarget} deployment and route contracts.`,
         "Failure output includes actionable diff for target mismatch.",
       ],
     },
   ];
   return {
+    executionReady: evidenceCoverage.sufficient,
+    blockers: evidenceCoverage.sufficient
+      ? []
+      : [`Need evidence from at least two independent sources; found ${evidenceCoverage.independentSourceCount}.`],
     tasks,
     acceptance_summary: {
       total_tasks: tasks.length,
@@ -1022,18 +1122,38 @@ function topViralBenchmarkSeeds(limit = 12) {
 function buildDecisionCitations({ selectedRepos, evidence }) {
   const githubTop = Array.isArray(evidence?.github) ? evidence.github.slice(0, 5) : [];
   const redditTop = Array.isArray(evidence?.reddit) ? evidence.reddit.slice(0, 5) : [];
+  const repoFallbackCitations = selectedRepos.map((r) => ({
+    type: "github",
+    title: `${r.full_name} repository evidence`,
+    url: `https://github.com/${r.full_name}`,
+  }));
+  const fallbackRiskCitation = repoFallbackCitations[0] || {
+    type: "github",
+    title: "GitHub repository benchmark evidence",
+    url: "https://github.com",
+  };
+
   return {
-    repo_selection: selectedRepos.map((r) => ({
-      repo: r.full_name,
-      citations: [
+    repo_selection: selectedRepos.map((r, index) => {
+      const citations = [
         ...githubTop.slice(0, 2).map((x) => ({ type: "github", title: x.title, url: x.url })),
         ...redditTop.slice(0, 1).map((x) => ({ type: "reddit", title: x.title, url: x.url })),
-      ],
-    })),
-    risk_and_rollout: [
+      ];
+      if (!citations.length && repoFallbackCitations[index]) citations.push(repoFallbackCitations[index]);
+      return {
+        repo: r.full_name,
+        citations,
+      };
+    }),
+    risk_and_rollout: ([
       ...githubTop.slice(0, 2).map((x) => ({ type: "github", title: x.title, url: x.url })),
       ...redditTop.slice(0, 2).map((x) => ({ type: "reddit", title: x.title, url: x.url })),
-    ],
+    ].length
+      ? [
+          ...githubTop.slice(0, 2).map((x) => ({ type: "github", title: x.title, url: x.url })),
+          ...redditTop.slice(0, 2).map((x) => ({ type: "reddit", title: x.title, url: x.url })),
+        ]
+      : [fallbackRiskCitation]),
   };
 }
 
@@ -1149,7 +1269,8 @@ function authMiddleware(apiKey) {
     if (!apiKey) return next();
     const authHeader = String(req.headers.authorization || "");
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : "";
-    if (!token || token !== apiKey) return res.status(401).json({ ok: false, error: "unauthorized" });
+    const headerKey = String(req.headers["x-api-key"] || "").trim();
+    if (token !== apiKey && headerKey !== apiKey) return res.status(401).json({ ok: false, error: "unauthorized" });
     return next();
   };
 }
@@ -1223,6 +1344,129 @@ function scoreGithubAnswer(item, queryTokens = []) {
     rank_score: score,
     matched_terms: queryTokens.filter((t) => text.includes(t)).slice(0, 10),
   };
+}
+
+function searchNeedlesGrm(topic, max = 5) {
+  const stop = new Set(["with", "from", "that", "this", "into", "using", "about", "when", "what", "where", "your", "have", "will", "should", "could", "would", "then", "than", "them", "they", "their", "there", "these", "those", "and", "for", "the", "are", "was", "were"]);
+  const seen = new Set();
+  const out = [];
+  for (const token of String(topic || "").split(/[^A-Za-z0-9_.:/-]+/)) {
+    if (!token) continue;
+    if (stop.has(token.toLowerCase())) continue;
+    if (token.includes(":") || token.includes("/")) {
+      if (token.length < 3) continue;
+    } else if (token.length < 4) continue;
+    const key = token.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(token.includes(":") || token.includes("/") ? `"${token}"` : token);
+    if (out.length >= max) break;
+  }
+  return out.join(" ");
+}
+
+function grmMcpBaseUrl() {
+  return String(process.env.GITHUBRESEARCHMCP_URL || "http://127.0.0.1:4105").replace(/\/$/, "");
+}
+
+function grmMcpBearer() {
+  // Env only — do not auto-read sibling token files (breaks unit tests that mock GitHub fetch).
+  return String(process.env.GITHUBRESEARCHMCP_TOKEN || process.env.MCP_AUTH_TOKEN || "").trim();
+}
+
+function mapGrmResearchToInayanReport(payload, query) {
+  const reposRaw = Array.isArray(payload?.repos?.items)
+    ? payload.repos.items
+    : (Array.isArray(payload?.repos) ? payload.repos : []);
+  const issuesRaw = Array.isArray(payload?.issues?.items)
+    ? payload.issues.items
+    : (Array.isArray(payload?.issues) ? payload.issues : []);
+  const repos = reposRaw.slice(0, 40).map((repo) => ({
+    full_name: repo.full_name || repo.fullName || repo.name || "",
+    html_url: repo.html_url || repo.url || "",
+    description: clipText(repo.description || "", 360),
+    stars: Number(repo.stargazers_count || repo.stars || 0),
+    forks: Number(repo.forks_count || repo.forks || 0),
+    language: repo.language || null,
+    topics: Array.isArray(repo.topics) ? repo.topics : [],
+    uiEvidence: 0,
+    breakPatternEvidence: 0,
+    breakPatternHits: [],
+    score: Number(repo.score || repo.stargazers_count || 0),
+  })).filter((r) => r.full_name);
+  const answers = issuesRaw.slice(0, 40).map((it) => ({
+    title: clipText(it.title || "", 220),
+    html_url: it.html_url || it.url || "",
+    repository_url: it.repository_url || "",
+    comments: Number(it.comments || 0),
+    updated_at: it.updated_at || null,
+    rank_score: Number(it.score || 0),
+    matched_terms: [],
+    code_snippets: [],
+  }));
+  if (!repos.length) return null;
+  return {
+    summary: {
+      generated_at: new Date().toISOString(),
+      query,
+      repo_hits: repos.length,
+      answer_hits: answers.length,
+      top_terms: searchNeedlesGrm(query, 8).split(" ").filter(Boolean),
+      source_errors: [],
+      github_token_configured: true,
+      via: "githubresearchmcp",
+    },
+    repos,
+    answers,
+  };
+}
+
+async function tryGithubResearchViaGrm({ query, maxResults = 40 }) {
+  if (process.env.GITHUBRESEARCHMCP_ENABLED === "0") return null;
+  const base = grmMcpBaseUrl();
+  const token = grmMcpBearer();
+  if (!token) return null;
+  const needles = searchNeedlesGrm(query, 5) || String(query || "").trim();
+  if (!needles) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const response = await fetch(`${base}/mcp`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "github_research",
+          arguments: { topic: needles, limit: Math.min(Number(maxResults) || 8, 8) },
+        },
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    const rpc = await response.json();
+    const text = rpc?.result?.content?.[0]?.text;
+    if (!text) return null;
+    const payload = JSON.parse(text);
+    return mapGrmResearchToInayanReport(payload, query);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function markRedditResultsUntrusted(results) {
+  return (Array.isArray(results) ? results : []).map((row) => {
+    if (!row || typeof row !== "object") return { text: String(row), untrusted: true };
+    return { ...row, untrusted: true };
+  });
 }
 
 async function runGithubResearch({
@@ -1792,6 +2036,44 @@ function buildScopedGithubQuery(input, maxLen = 220) {
   return String(`${input?.productName || ""} ${input?.userGoal || ""}`).trim().slice(0, maxLen);
 }
 
+function buildMagicRunQueries({ productName, userGoal, stack }) {
+  const hay = `${productName || ""} ${userGoal || ""} ${(stack || []).join(" ")}`.toLowerCase();
+  const queries = [
+    `${productName} ${userGoal}`,
+    `${productName} open source`,
+    `${userGoal}`,
+  ];
+
+  if (/puzzle fighter|super puzzle fighter|puyo|panel attack|puzzle league/.test(hay)) {
+    queries.unshift(
+      '"puzzle fighter" clone',
+      '"super puzzle fighter"',
+      '"puyo puyo" clone',
+      '"panel attack" puzzle'
+    );
+  }
+
+  if (/agent|builder|mcp|llm|ai orchestration|ai builder/.test(hay)) {
+    queries.push(
+      `${productName} open source agent builder`,
+      `${productName} dashboard chat workflow`,
+      "best open source AI builder orchestration"
+    );
+  }
+
+  return [...new Set(queries.map((q) => String(q || "").trim()).filter(Boolean))].slice(0, 8);
+}
+
+function shouldUseViralBuilderSeeds({ productName, userGoal, stack }) {
+  const hay = `${productName || ""} ${userGoal || ""} ${(stack || []).join(" ")}`.toLowerCase();
+  return /agent|builder|mcp|llm|ai orchestration|ai builder/.test(hay);
+}
+
+function shouldUseLiveGenreScout({ productName, userGoal, stack }) {
+  const hay = `${productName || ""} ${userGoal || ""} ${(stack || []).join(" ")}`.toLowerCase();
+  return /puzzle fighter|super puzzle fighter|puyo|panel attack|puzzle league/.test(hay);
+}
+
 function selectIntentSubreddits(input, defaults = []) {
   const hay = `${input?.productName || ""} ${input?.userGoal || ""} ${(input?.queries || []).join(" ")}`.toLowerCase();
   const isMarketingAutomation =
@@ -1845,10 +2127,10 @@ function queryBuiltinRepoIndex({ queries, minStars = 500, topK = 12 }) {
   return ranked.slice(0, Math.max(topK * 3, 24));
 }
 
-async function discoverScoutRepos({ queries, perQuery, minStars, topK, seedRepos, githubToken }) {
+async function discoverScoutRepos({ queries, perQuery, minStars, topK, seedRepos, githubToken, useBuiltinIndex = true }) {
   if (Array.isArray(seedRepos) && seedRepos.length > 0) return seedRepos;
 
-  const discovered = queryBuiltinRepoIndex({ queries, minStars, topK });
+  const discovered = useBuiltinIndex ? queryBuiltinRepoIndex({ queries, minStars, topK }) : [];
   const minNeeded = Math.max(topK, Math.min(30, perQuery * Math.max(1, queries.length)));
   if (discovered.length >= minNeeded) return discovered;
 
@@ -3344,8 +3626,19 @@ export function createApp() {
 
   app.disable("x-powered-by");
   app.use(helmet({
-    // The dashboard ships an inline script block; keep CSP disabled until nonce-based script loading is added.
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+      reportOnly: CSP_REPORT_ONLY,
+      directives: {
+        defaultSrc: ["'self'"],
+        baseUri: ["'self'"],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'self'"],
+        imgSrc: ["'self'", "data:", "https:"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https:"],
+        connectSrc: ["'self'"],
+      },
+    },
   }));
   app.use(express.json({ limit: "1mb" }));
   app.use(rateLimit({ windowMs: RATE_LIMIT_WINDOW_MS, max: RATE_LIMIT_MAX, standardHeaders: true, legacyHeaders: false }));
@@ -3452,6 +3745,8 @@ export function createApp() {
 
   const doGithubResearch = async (input) => {
     if (E2E_MOCK_MODE) return buildMockGithubReport(input || {});
+    const viaGrm = await tryGithubResearchViaGrm(input || {});
+    if (viaGrm) return viaGrm;
     return await runGithubResearch(input);
   };
 
@@ -3840,6 +4135,9 @@ export function createApp() {
         redditAuthProfiles,
         redditRequestTimeoutMs: REDDIT_REQUEST_TIMEOUT_MS,
       });
+      report.results = markRedditResultsUntrusted(report.results);
+      report.untrusted = true;
+      if (Array.isArray(report.posts)) report.posts = markRedditResultsUntrusted(report.posts);
 
       const run = {
         id: nowId("reddit"),
@@ -3859,6 +4157,7 @@ export function createApp() {
         ok: true,
         runId: run.id,
         summary: report.summary,
+        untrusted: true,
         results: report.results,
       });
     } catch (err) {
@@ -4482,18 +4781,17 @@ export function createApp() {
     }
 
     const startedMs = Date.now();
-    const queries = [
-      `${p.productName} open source agent builder`,
-      `${p.productName} dashboard chat workflow`,
-      "best open source AI builder orchestration",
-    ];
+    const queries = buildMagicRunQueries(p);
+    const useLiveGenreScout = shouldUseLiveGenreScout(p);
+    const useBuilderSeeds = shouldUseViralBuilderSeeds(p);
+    const scoutMinStars = useLiveGenreScout ? 0 : 500;
     const timeoutTierConfig = {
       fast: { perQuery: 12, topK: 10, maxResults: 30, redditLimit: 16 },
       standard: { perQuery: 18, topK: 12, maxResults: 45, redditLimit: 24 },
       deep: { perQuery: 24, topK: 14, maxResults: 60, redditLimit: 32 },
     }[p.timeoutTier || "fast"];
 
-    const seedRepos = topViralBenchmarkSeeds(12);
+    const seedRepos = useBuilderSeeds ? topViralBenchmarkSeeds(12) : [];
     const scoutCacheKey = deterministicHash({
       mode: "magic_scout",
       timeoutTier: p.timeoutTier,
@@ -4507,13 +4805,14 @@ export function createApp() {
         const discovered = await discoverScoutRepos({
           queries,
           perQuery: timeoutTierConfig.perQuery,
-          minStars: 500,
+          minStars: scoutMinStars,
           topK: timeoutTierConfig.topK,
           seedRepos,
           githubToken: GITHUB_TOKEN,
+          useBuiltinIndex: !useLiveGenreScout,
         });
         scoutRepos = deterministicRepoSort(discovered)
-          .filter((r) => Number(r.stargazers_count || r.stars || 0) >= 500)
+          .filter((r) => Number(r.stargazers_count || r.stars || 0) >= scoutMinStars)
           .slice(0, timeoutTierConfig.topK)
           .map((r) => ({
             full_name: r.full_name,
@@ -4602,6 +4901,7 @@ export function createApp() {
         : benchmark
     ).slice(0, 6);
     const evidence = buildEvidencePack({ githubReport, redditReport, fusion, last30daysReport });
+    const evidenceCoverage = buildEvidenceCoverage(evidence);
     const decisionCitations = buildDecisionCitations({ selectedRepos, evidence });
 
     const baseBlueprint = buildExecutableBlueprint({
@@ -4610,6 +4910,7 @@ export function createApp() {
       stack: p.stack,
       selectedRepos,
       evidence,
+      evidenceCoverage,
       constraints: p.constraints,
     });
     baseBlueprint.decisionCitations = decisionCitations;
@@ -4713,6 +5014,7 @@ export function createApp() {
       benchmark,
       fusion,
       evidence,
+      evidenceCoverage,
       projectMemory: {
         projectKey,
         latestPlanHash: updatedMemory.latestPlanHash,
@@ -4731,8 +5033,8 @@ export function createApp() {
         researchRetries: last30daysReport?._meta?.attempts || 0,
         researchDurationMs: last30daysReport?._meta?.durationMs || 0,
         researchCacheHit: last30daysReport?._meta?.cacheHit || false,
-        sourcesQueried: ['github', 'reddit', 'last30days'].filter(
-          (s) => s === 'github' ? !!githubReport : s === 'reddit' ? !!redditReport : !!last30daysReport
+        sourcesQueried: ['github', 'reddit'].filter(
+          (s) => s === 'github' ? !!githubReport : !!redditReport
         ),
       },
       markdownPlan: [
@@ -5437,6 +5739,7 @@ export function createApp() {
 }
 
 export function startServer(port = DEFAULT_PORT) {
+  loadEnvFileIntoProcess();
   const app = createApp();
   return app.listen(port, () => {
     console.log(`InayanBuilderBot (Masterpiece Agent + Chat Tool) listening on http://localhost:${port}`);
