@@ -289,7 +289,7 @@ export class ActionGenerator {
    */
   private generateContextualText(flow: string): string {
     const contextualTexts: Record<string, string[]> = {
-      onboarding: ['john@example.com', 'password123', 'John Doe'],
+      onboarding: ['newuser@example.org', 'password123', 'John Doe'],
       settings: ['true', 'false', 'enabled'],
       sync: ['sync', 'refresh', 'update'],
       messaging: ['Hello', 'Test message', 'Reply'],
