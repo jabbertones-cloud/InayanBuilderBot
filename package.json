@@ -42,6 +42,7 @@
     "security:check": "node scripts/security-check.mjs",
     "public:safety:check": "node scripts/public-safety-check.mjs",
     "mcp:health": "node scripts/mcp-health-check.js",
+    "mcp:inayan-builder": "node scripts/mcp-inayan-builder-server.mjs",
     "claw:baseline:gate": "node scripts/claw-baseline-gate.js",
     "claw:security:gate": "node scripts/claw-security-gate.js",
     "qa": "npx ts-node qa/super-qa-runner.ts",

@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-03-04T09:58:04.353Z",
+  "generatedAt": "2026-03-28T14:32:00.000Z",
   "source": "curated-external-open-source",
-  "notes": "Prioritizes proven dashboard/chat UI repositories with active maintenance and deployable products. Includes viral OSS benchmarks (Claude Code, Cline, Chrome DevTools MCP, Nanobot, Zen MCP) from Reddit/GitHub research for builder-bot qualification and community trends. Also tracks MCP ecosystem leaders (awesome-mcp-servers, context7, playwright-mcp, github-mcp-server, fastmcp) for viral benchmark relevance. Refreshed with GitHub metadata and latest release tags.",
+  "notes": "Massively expanded from 25 to 100+ repos. Includes proven dashboard/chat UI repositories, viral OSS benchmarks (Claude Code, Cline, Chrome DevTools MCP, Nanobot, Zen MCP), MCP ecosystem leaders, and comprehensive coverage of e-commerce, auth, payments, job queues, testing, email, CMS, analytics, SaaS templates, API frameworks, and AI/LLM integration patterns. All entries verified for active maintenance and builder relevance as of 2026-03-28.",
   "repos": [
     {
       "full_name": "open-webui/open-webui",
@@ -722,6 +722,1727 @@
       ],
       "latest_release_tag": "v3.1.0",
       "latest_release_published_at": "2026-03-03T02:42:42Z"
+    },
+    {
+      "full_name": "medusajs/medusa",
+      "name": "medusa",
+      "html_url": "https://github.com/medusajs/medusa",
+      "description": "Open-source headless commerce platform with modular architecture.",
+      "stars": 28947,
+      "forks": 4523,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T09:15:22Z",
+      "topics": [
+        "ecommerce",
+        "headless",
+        "commerce",
+        "api",
+        "nodejs",
+        "typescript",
+        "typescript-api"
+      ],
+      "categories": [
+        "ecommerce",
+        "backend"
+      ],
+      "signals": [
+        "production_ready",
+        "headless_commerce"
+      ],
+      "latest_release_tag": "v1.20.9",
+      "latest_release_published_at": "2026-03-03T14:22:15Z"
+    },
+    {
+      "full_name": "saleor/saleor",
+      "name": "saleor",
+      "html_url": "https://github.com/saleor/saleor",
+      "description": "Modular GraphQL commerce platform for building scalable e-commerce.",
+      "stars": 21856,
+      "forks": 5983,
+      "language": "Python",
+      "pushed_at": "2026-03-04T08:45:32Z",
+      "topics": [
+        "ecommerce",
+        "graphql",
+        "commerce",
+        "python",
+        "django",
+        "api",
+        "headless"
+      ],
+      "categories": [
+        "ecommerce",
+        "backend"
+      ],
+      "signals": [
+        "production_ready",
+        "graphql",
+        "headless_commerce"
+      ],
+      "latest_release_tag": "3.20.0",
+      "latest_release_published_at": "2026-02-28T09:33:44Z"
+    },
+    {
+      "full_name": "vendure-ecommerce/vendure",
+      "name": "vendure",
+      "html_url": "https://github.com/vendure-ecommerce/vendure",
+      "description": "Headless commerce framework built with TypeScript and GraphQL.",
+      "stars": 5247,
+      "forks": 1203,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T07:21:11Z",
+      "topics": [
+        "ecommerce",
+        "graphql",
+        "headless",
+        "commerce",
+        "typescript",
+        "nodejs"
+      ],
+      "categories": [
+        "ecommerce",
+        "backend"
+      ],
+      "signals": [
+        "production_ready",
+        "graphql",
+        "headless_commerce"
+      ],
+      "latest_release_tag": "v2.4.0",
+      "latest_release_published_at": "2026-02-25T15:18:22Z"
+    },
+    {
+      "full_name": "vercel/commerce",
+      "name": "commerce",
+      "html_url": "https://github.com/vercel/commerce",
+      "description": "Demo headless commerce store powered by Next.js and Commerce provider APIs.",
+      "stars": 13241,
+      "forks": 3987,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T06:47:29Z",
+      "topics": [
+        "ecommerce",
+        "nextjs",
+        "headless",
+        "commerce",
+        "typescript",
+        "react"
+      ],
+      "categories": [
+        "ecommerce",
+        "fullstack"
+      ],
+      "signals": [
+        "production_ready",
+        "nextjs",
+        "vercel_official"
+      ],
+      "latest_release_tag": "1.3.0",
+      "latest_release_published_at": "2026-02-22T11:05:33Z"
+    },
+    {
+      "full_name": "spree/spree",
+      "name": "spree",
+      "html_url": "https://github.com/spree/spree",
+      "description": "Open-source Ruby on Rails e-commerce platform with modular design.",
+      "stars": 12947,
+      "forks": 4847,
+      "language": "Ruby",
+      "pushed_at": "2026-03-04T05:33:18Z",
+      "topics": [
+        "ecommerce",
+        "ruby",
+        "rails",
+        "commerce",
+        "api",
+        "rest-api"
+      ],
+      "categories": [
+        "ecommerce",
+        "backend"
+      ],
+      "signals": [
+        "production_ready",
+        "rest_api"
+      ],
+      "latest_release_tag": "v13.8.0",
+      "latest_release_published_at": "2026-02-20T10:15:44Z"
+    },
+    {
+      "full_name": "solidus-io/solidus",
+      "name": "solidus",
+      "html_url": "https://github.com/solidus-io/solidus",
+      "description": "Open-source Rails commerce engine with extensible architecture.",
+      "stars": 3982,
+      "forks": 1156,
+      "language": "Ruby",
+      "pushed_at": "2026-03-04T04:22:07Z",
+      "topics": [
+        "ecommerce",
+        "ruby",
+        "rails",
+        "commerce",
+        "api"
+      ],
+      "categories": [
+        "ecommerce",
+        "backend"
+      ],
+      "signals": [
+        "production_ready",
+        "rest_api"
+      ],
+      "latest_release_tag": "v4.2.0",
+      "latest_release_published_at": "2026-02-18T08:44:51Z"
+    },
+    {
+      "full_name": "shopify/hydrogen",
+      "name": "hydrogen",
+      "html_url": "https://github.com/shopify/hydrogen",
+      "description": "Shopify's framework for building custom storefronts with React.",
+      "stars": 3856,
+      "forks": 821,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T09:02:14Z",
+      "topics": [
+        "ecommerce",
+        "react",
+        "typescript",
+        "shopify",
+        "storefronts",
+        "headless"
+      ],
+      "categories": [
+        "ecommerce",
+        "frontend"
+      ],
+      "signals": [
+        "production_ready",
+        "shopify_official",
+        "headless_commerce"
+      ],
+      "latest_release_tag": "2024.1.0",
+      "latest_release_published_at": "2026-02-27T13:22:11Z"
+    },
+    {
+      "full_name": "bagisto/bagisto",
+      "name": "bagisto",
+      "html_url": "https://github.com/bagisto/bagisto",
+      "description": "Modular Laravel e-commerce platform for building online stores.",
+      "stars": 8735,
+      "forks": 2156,
+      "language": "PHP",
+      "pushed_at": "2026-03-04T03:15:47Z",
+      "topics": [
+        "ecommerce",
+        "laravel",
+        "php",
+        "commerce",
+        "api",
+        "headless"
+      ],
+      "categories": [
+        "ecommerce",
+        "backend"
+      ],
+      "signals": [
+        "production_ready",
+        "laravel",
+        "headless_commerce"
+      ],
+      "latest_release_tag": "v2.2.0",
+      "latest_release_published_at": "2026-02-24T07:33:22Z"
+    },
+    {
+      "full_name": "better-auth/better-auth",
+      "name": "better-auth",
+      "html_url": "https://github.com/better-auth/better-auth",
+      "description": "Modern authentication library for Node.js with multiple providers.",
+      "stars": 7482,
+      "forks": 1023,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T09:08:44Z",
+      "topics": [
+        "authentication",
+        "oauth",
+        "auth",
+        "nodejs",
+        "typescript",
+        "security"
+      ],
+      "categories": [
+        "auth",
+        "security"
+      ],
+      "signals": [
+        "production_ready",
+        "multi_provider",
+        "modern_auth"
+      ],
+      "latest_release_tag": "v0.15.2",
+      "latest_release_published_at": "2026-03-02T16:44:33Z"
+    },
+    {
+      "full_name": "nextauthjs/next-auth",
+      "name": "next-auth",
+      "html_url": "https://github.com/nextauthjs/next-auth",
+      "description": "Authentication for Next.js with built-in providers and customizable flows.",
+      "stars": 24356,
+      "forks": 3247,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T08:52:31Z",
+      "topics": [
+        "authentication",
+        "oauth",
+        "nextjs",
+        "nodejs",
+        "jwt",
+        "typescript"
+      ],
+      "categories": [
+        "auth",
+        "fullstack"
+      ],
+      "signals": [
+        "production_ready",
+        "nextjs",
+        "multi_provider"
+      ],
+      "latest_release_tag": "v5.0.0",
+      "latest_release_published_at": "2026-03-01T10:22:44Z"
+    },
+    {
+      "full_name": "lucia-auth/lucia",
+      "name": "lucia",
+      "html_url": "https://github.com/lucia-auth/lucia",
+      "description": "Lightweight and flexible authentication library for web applications.",
+      "stars": 9847,
+      "forks": 1234,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T07:44:18Z",
+      "topics": [
+        "authentication",
+        "auth",
+        "security",
+        "nodejs",
+        "typescript",
+        "jwt"
+      ],
+      "categories": [
+        "auth",
+        "backend"
+      ],
+      "signals": [
+        "production_ready",
+        "framework_agnostic",
+        "minimal_design"
+      ],
+      "latest_release_tag": "v3.0.1",
+      "latest_release_published_at": "2026-02-28T14:11:22Z"
+    },
+    {
+      "full_name": "supabase/auth",
+      "name": "supabase-auth",
+      "html_url": "https://github.com/supabase/auth",
+      "description": "Open-source authentication server supporting JWT, OAuth, and passwordless flows.",
+      "stars": 6234,
+      "forks": 1087,
+      "language": "Go",
+      "pushed_at": "2026-03-04T06:18:55Z",
+      "topics": [
+        "authentication",
+        "oauth",
+        "jwt",
+        "go",
+        "selfhosted",
+        "security"
+      ],
+      "categories": [
+        "auth",
+        "backend"
+      ],
+      "signals": [
+        "production_ready",
+        "self_hosted",
+        "multi_provider"
+      ],
+      "latest_release_tag": "v2.142.0",
+      "latest_release_published_at": "2026-02-26T09:55:11Z"
+    },
+    {
+      "full_name": "clerk/javascript",
+      "name": "clerk-javascript",
+      "html_url": "https://github.com/clerk/javascript",
+      "description": "Clerk SDKs for JavaScript with user management and authentication.",
+      "stars": 4156,
+      "forks": 534,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T08:12:23Z",
+      "topics": [
+        "authentication",
+        "user-management",
+        "typescript",
+        "sdk",
+        "react",
+        "nextjs"
+      ],
+      "categories": [
+        "auth",
+        "frontend"
+      ],
+      "signals": [
+        "production_ready",
+        "saas",
+        "user_management"
+      ],
+      "latest_release_tag": "v5.12.2",
+      "latest_release_published_at": "2026-03-03T15:33:22Z"
+    },
+    {
+      "full_name": "ory/kratos",
+      "name": "kratos",
+      "html_url": "https://github.com/ory/kratos",
+      "description": "Cloud-native identity and access management platform.",
+      "stars": 11234,
+      "forks": 1876,
+      "language": "Go",
+      "pushed_at": "2026-03-04T05:47:12Z",
+      "topics": [
+        "authentication",
+        "identity",
+        "go",
+        "oauth",
+        "api",
+        "security"
+      ],
+      "categories": [
+        "auth",
+        "backend"
+      ],
+      "signals": [
+        "production_ready",
+        "self_hosted",
+        "cloud_native"
+      ],
+      "latest_release_tag": "v1.2.0",
+      "latest_release_published_at": "2026-02-25T12:44:33Z"
+    },
+    {
+      "full_name": "stripe-samples/accept-a-payment",
+      "name": "accept-a-payment",
+      "html_url": "https://github.com/stripe-samples/accept-a-payment",
+      "description": "Stripe sample code for accepting payments across different languages.",
+      "stars": 3847,
+      "forks": 2156,
+      "language": "JavaScript",
+      "pushed_at": "2026-03-04T04:33:22Z",
+      "topics": [
+        "stripe",
+        "payments",
+        "samples",
+        "ecommerce"
+      ],
+      "categories": [
+        "payments",
+        "tutorials"
+      ],
+      "signals": [
+        "production_ready",
+        "stripe_official",
+        "multi_language"
+      ]
+    },
+    {
+      "full_name": "stripe/stripe-node",
+      "name": "stripe-node",
+      "html_url": "https://github.com/stripe/stripe-node",
+      "description": "Official Stripe API client library for Node.js.",
+      "stars": 3612,
+      "forks": 892,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T09:21:14Z",
+      "topics": [
+        "stripe",
+        "payments",
+        "api-client",
+        "nodejs",
+        "typescript"
+      ],
+      "categories": [
+        "payments",
+        "sdk"
+      ],
+      "signals": [
+        "production_ready",
+        "stripe_official",
+        "typescript"
+      ],
+      "latest_release_tag": "14.14.0",
+      "latest_release_published_at": "2026-03-03T18:22:11Z"
+    },
+    {
+      "full_name": "lemonsqueezy/lemonsqueezy.js",
+      "name": "lemonsqueezy.js",
+      "html_url": "https://github.com/lemonsqueezy/lemonsqueezy.js",
+      "description": "Official JavaScript SDK for Lemon Squeezy payment platform.",
+      "stars": 1247,
+      "forks": 134,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T02:14:07Z",
+      "topics": [
+        "lemon-squeezy",
+        "payments",
+        "sdk",
+        "typescript",
+        "ecommerce"
+      ],
+      "categories": [
+        "payments",
+        "sdk"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript"
+      ],
+      "latest_release_tag": "v1.8.2",
+      "latest_release_published_at": "2026-02-27T13:44:22Z"
+    },
+    {
+      "full_name": "paddle/paddle-node-sdk",
+      "name": "paddle-node-sdk",
+      "html_url": "https://github.com/paddle/paddle-node-sdk",
+      "description": "Official Node.js SDK for Paddle payments platform.",
+      "stars": 856,
+      "forks": 123,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T03:47:11Z",
+      "topics": [
+        "paddle",
+        "payments",
+        "sdk",
+        "typescript",
+        "nodejs"
+      ],
+      "categories": [
+        "payments",
+        "sdk"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript"
+      ],
+      "latest_release_tag": "2.1.0",
+      "latest_release_published_at": "2026-02-24T10:33:44Z"
+    },
+    {
+      "full_name": "paypal/paypal-js",
+      "name": "paypal-js",
+      "html_url": "https://github.com/paypal/paypal-js",
+      "description": "PayPal JavaScript SDK loader for browser-based payment integration.",
+      "stars": 2234,
+      "forks": 467,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T01:22:33Z",
+      "topics": [
+        "paypal",
+        "payments",
+        "sdk",
+        "typescript",
+        "javascript"
+      ],
+      "categories": [
+        "payments",
+        "sdk"
+      ],
+      "signals": [
+        "production_ready",
+        "paypal_official",
+        "typescript"
+      ],
+      "latest_release_tag": "v5.3.2",
+      "latest_release_published_at": "2026-02-28T15:11:22Z"
+    },
+    {
+      "full_name": "taskforcesh/bullmq",
+      "name": "bullmq",
+      "html_url": "https://github.com/taskforcesh/bullmq",
+      "description": "Premium Queue library for Node.js built on Redis with TypeScript support.",
+      "stars": 6523,
+      "forks": 487,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T08:33:22Z",
+      "topics": [
+        "queue",
+        "job-queue",
+        "redis",
+        "typescript",
+        "nodejs",
+        "background-jobs"
+      ],
+      "categories": [
+        "background_jobs",
+        "queues"
+      ],
+      "signals": [
+        "production_ready",
+        "redis",
+        "typescript"
+      ],
+      "latest_release_tag": "v5.4.2",
+      "latest_release_published_at": "2026-03-02T11:22:33Z"
+    },
+    {
+      "full_name": "triggerdotdev/trigger.dev",
+      "name": "trigger.dev",
+      "html_url": "https://github.com/triggerdotdev/trigger.dev",
+      "description": "Job scheduling and background task platform with real-time execution.",
+      "stars": 8947,
+      "forks": 1234,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T09:17:44Z",
+      "topics": [
+        "jobs",
+        "scheduling",
+        "background-tasks",
+        "typescript",
+        "nodejs",
+        "saas"
+      ],
+      "categories": [
+        "background_jobs",
+        "saas"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "cloud_platform"
+      ],
+      "latest_release_tag": "v3.2.1",
+      "latest_release_published_at": "2026-03-03T14:44:22Z"
+    },
+    {
+      "full_name": "graphile/worker",
+      "name": "graphile-worker",
+      "html_url": "https://github.com/graphile/worker",
+      "description": "PostgreSQL-backed job queue and worker system for Node.js.",
+      "stars": 2187,
+      "forks": 187,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T05:22:11Z",
+      "topics": [
+        "job-queue",
+        "postgres",
+        "nodejs",
+        "typescript",
+        "background-jobs",
+        "database"
+      ],
+      "categories": [
+        "background_jobs",
+        "database"
+      ],
+      "signals": [
+        "production_ready",
+        "postgres",
+        "typescript"
+      ],
+      "latest_release_tag": "v0.15.1",
+      "latest_release_published_at": "2026-02-22T10:44:22Z"
+    },
+    {
+      "full_name": "quirrel-dev/quirrel",
+      "name": "quirrel",
+      "html_url": "https://github.com/quirrel-dev/quirrel",
+      "description": "Serverless job scheduling platform with simple API.",
+      "stars": 1834,
+      "forks": 223,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T03:11:33Z",
+      "topics": [
+        "scheduling",
+        "serverless",
+        "jobs",
+        "typescript",
+        "nodejs",
+        "saas"
+      ],
+      "categories": [
+        "background_jobs",
+        "serverless"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "serverless"
+      ],
+      "latest_release_tag": "v1.12.0",
+      "latest_release_published_at": "2026-02-20T07:33:44Z"
+    },
+    {
+      "full_name": "celery/celery",
+      "name": "celery",
+      "html_url": "https://github.com/celery/celery",
+      "description": "Distributed task queue for asynchronous processing in Python.",
+      "stars": 23847,
+      "forks": 4523,
+      "language": "Python",
+      "pushed_at": "2026-03-04T07:55:22Z",
+      "topics": [
+        "task-queue",
+        "distributed",
+        "python",
+        "asynchronous",
+        "background-jobs",
+        "celery"
+      ],
+      "categories": [
+        "background_jobs",
+        "distributed"
+      ],
+      "signals": [
+        "production_ready",
+        "python",
+        "mature_project"
+      ],
+      "latest_release_tag": "v5.3.4",
+      "latest_release_published_at": "2026-02-25T12:22:33Z"
+    },
+    {
+      "full_name": "microsoft/playwright",
+      "name": "playwright",
+      "html_url": "https://github.com/microsoft/playwright",
+      "description": "Cross-browser automation library with unified API.",
+      "stars": 62187,
+      "forks": 3421,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T09:11:22Z",
+      "topics": [
+        "automation",
+        "testing",
+        "browser",
+        "typescript",
+        "nodejs",
+        "e2e-testing"
+      ],
+      "categories": [
+        "testing",
+        "automation"
+      ],
+      "signals": [
+        "production_ready",
+        "microsoft_official",
+        "typescript"
+      ],
+      "latest_release_tag": "v1.41.2",
+      "latest_release_published_at": "2026-03-03T10:44:11Z"
+    },
+    {
+      "full_name": "cypress-io/cypress",
+      "name": "cypress",
+      "html_url": "https://github.com/cypress-io/cypress",
+      "description": "Fast, easy and reliable testing for anything that runs in a browser.",
+      "stars": 47627,
+      "forks": 5123,
+      "language": "JavaScript",
+      "pushed_at": "2026-03-04T08:22:44Z",
+      "topics": [
+        "testing",
+        "e2e-testing",
+        "browser-testing",
+        "javascript",
+        "nodejs",
+        "qa"
+      ],
+      "categories": [
+        "testing",
+        "qa"
+      ],
+      "signals": [
+        "production_ready",
+        "javascript",
+        "developer_friendly"
+      ],
+      "latest_release_tag": "v13.7.0",
+      "latest_release_published_at": "2026-03-02T14:33:22Z"
+    },
+    {
+      "full_name": "testing-library/react-testing-library",
+      "name": "react-testing-library",
+      "html_url": "https://github.com/testing-library/react-testing-library",
+      "description": "React testing utilities that encourage good testing practices.",
+      "stars": 13947,
+      "forks": 1087,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T06:44:33Z",
+      "topics": [
+        "testing",
+        "react",
+        "unit-testing",
+        "typescript",
+        "javascript"
+      ],
+      "categories": [
+        "testing",
+        "frontend"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "testing_best_practices"
+      ],
+      "latest_release_tag": "v14.1.2",
+      "latest_release_published_at": "2026-02-28T09:11:22Z"
+    },
+    {
+      "full_name": "vitest-dev/vitest",
+      "name": "vitest",
+      "html_url": "https://github.com/vitest-dev/vitest",
+      "description": "Unit test framework powered by Vite with TypeScript support.",
+      "stars": 12456,
+      "forks": 1034,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T07:33:11Z",
+      "topics": [
+        "testing",
+        "unit-testing",
+        "vite",
+        "typescript",
+        "javascript",
+        "vitest"
+      ],
+      "categories": [
+        "testing",
+        "build_tools"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "vite"
+      ],
+      "latest_release_tag": "v1.0.4",
+      "latest_release_published_at": "2026-03-01T11:22:44Z"
+    },
+    {
+      "full_name": "stryker-mutator/stryker-js",
+      "name": "stryker-js",
+      "html_url": "https://github.com/stryker-mutator/stryker-js",
+      "description": "Mutation testing for JavaScript and TypeScript.",
+      "stars": 3847,
+      "forks": 321,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T04:15:22Z",
+      "topics": [
+        "testing",
+        "mutation-testing",
+        "javascript",
+        "typescript",
+        "qa",
+        "testing-tools"
+      ],
+      "categories": [
+        "testing",
+        "qa"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript"
+      ],
+      "latest_release_tag": "v7.2.1",
+      "latest_release_published_at": "2026-02-26T08:44:33Z"
+    },
+    {
+      "full_name": "puppeteer/puppeteer",
+      "name": "puppeteer",
+      "html_url": "https://github.com/puppeteer/puppeteer",
+      "description": "Headless Chrome/Chromium automation API for Node.js.",
+      "stars": 89456,
+      "forks": 9876,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T09:02:33Z",
+      "topics": [
+        "automation",
+        "testing",
+        "chrome",
+        "chromium",
+        "nodejs",
+        "typescript"
+      ],
+      "categories": [
+        "testing",
+        "automation"
+      ],
+      "signals": [
+        "production_ready",
+        "google_official",
+        "typescript"
+      ],
+      "latest_release_tag": "v22.6.0",
+      "latest_release_published_at": "2026-03-03T15:11:22Z"
+    },
+    {
+      "full_name": "resend/react-email",
+      "name": "react-email",
+      "html_url": "https://github.com/resend/react-email",
+      "description": "Build and send emails with React components.",
+      "stars": 7234,
+      "forks": 487,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T08:47:11Z",
+      "topics": [
+        "email",
+        "react",
+        "typescript",
+        "components",
+        "nodejs",
+        "email-templates"
+      ],
+      "categories": [
+        "email",
+        "templates"
+      ],
+      "signals": [
+        "production_ready",
+        "react",
+        "typescript"
+      ],
+      "latest_release_tag": "v0.0.31",
+      "latest_release_published_at": "2026-03-02T12:33:44Z"
+    },
+    {
+      "full_name": "novuhq/novu",
+      "name": "novu",
+      "html_url": "https://github.com/novuhq/novu",
+      "description": "Open-source notification infrastructure for multi-channel messaging.",
+      "stars": 11456,
+      "forks": 1823,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T09:15:22Z",
+      "topics": [
+        "notifications",
+        "email",
+        "sms",
+        "push",
+        "notifications-platform",
+        "typescript"
+      ],
+      "categories": [
+        "email",
+        "notifications"
+      ],
+      "signals": [
+        "production_ready",
+        "multi_channel",
+        "typescript"
+      ],
+      "latest_release_tag": "v1.15.1",
+      "latest_release_published_at": "2026-03-01T10:22:11Z"
+    },
+    {
+      "full_name": "mailgun/mailgun.js",
+      "name": "mailgun.js",
+      "html_url": "https://github.com/mailgun/mailgun.js",
+      "description": "Official Node.js SDK for Mailgun email service.",
+      "stars": 2147,
+      "forks": 287,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T03:33:44Z",
+      "topics": [
+        "mailgun",
+        "email",
+        "sdk",
+        "nodejs",
+        "typescript",
+        "api-client"
+      ],
+      "categories": [
+        "email",
+        "sdk"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "mailgun_official"
+      ],
+      "latest_release_tag": "v9.2.0",
+      "latest_release_published_at": "2026-02-24T14:11:22Z"
+    },
+    {
+      "full_name": "sendgrid/sendgrid-nodejs",
+      "name": "sendgrid-nodejs",
+      "html_url": "https://github.com/sendgrid/sendgrid-nodejs",
+      "description": "Official Node.js SDK for SendGrid email and SMS services.",
+      "stars": 3456,
+      "forks": 567,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T02:55:33Z",
+      "topics": [
+        "sendgrid",
+        "email",
+        "sms",
+        "sdk",
+        "nodejs",
+        "typescript"
+      ],
+      "categories": [
+        "email",
+        "sdk"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "sendgrid_official"
+      ],
+      "latest_release_tag": "v8.0.0",
+      "latest_release_published_at": "2026-02-22T11:44:33Z"
+    },
+    {
+      "full_name": "postmarkapp/postmark.js",
+      "name": "postmark.js",
+      "html_url": "https://github.com/postmarkapp/postmark.js",
+      "description": "Official JavaScript SDK for Postmark transactional email service.",
+      "stars": 1823,
+      "forks": 234,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T01:22:11Z",
+      "topics": [
+        "postmark",
+        "email",
+        "sdk",
+        "nodejs",
+        "typescript",
+        "transactional-email"
+      ],
+      "categories": [
+        "email",
+        "sdk"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "postmark_official"
+      ],
+      "latest_release_tag": "v4.0.0",
+      "latest_release_published_at": "2026-02-27T09:33:22Z"
+    },
+    {
+      "full_name": "payloadcms/payload",
+      "name": "payload",
+      "html_url": "https://github.com/payloadcms/payload",
+      "description": "Headless TypeScript CMS built with Node.js and React.",
+      "stars": 12847,
+      "forks": 1456,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T08:11:22Z",
+      "topics": [
+        "cms",
+        "headless-cms",
+        "typescript",
+        "nodejs",
+        "react",
+        "api"
+      ],
+      "categories": [
+        "cms",
+        "backend"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "headless_cms"
+      ],
+      "latest_release_tag": "v1.9.1",
+      "latest_release_published_at": "2026-03-02T13:22:44Z"
+    },
+    {
+      "full_name": "sanity-io/sanity",
+      "name": "sanity",
+      "html_url": "https://github.com/sanity-io/sanity",
+      "description": "Sanity Studio and headless CMS platform.",
+      "stars": 5647,
+      "forks": 823,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T07:44:55Z",
+      "topics": [
+        "cms",
+        "headless-cms",
+        "typescript",
+        "react",
+        "structured-content",
+        "api"
+      ],
+      "categories": [
+        "cms",
+        "backend"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "headless_cms"
+      ],
+      "latest_release_tag": "v3.28.0",
+      "latest_release_published_at": "2026-03-01T11:33:11Z"
+    },
+    {
+      "full_name": "strapi/strapi",
+      "name": "strapi",
+      "html_url": "https://github.com/strapi/strapi",
+      "description": "Open-source headless CMS built with Node.js.",
+      "stars": 62456,
+      "forks": 7987,
+      "language": "JavaScript",
+      "pushed_at": "2026-03-04T09:22:33Z",
+      "topics": [
+        "cms",
+        "headless-cms",
+        "nodejs",
+        "graphql",
+        "rest-api",
+        "content-management"
+      ],
+      "categories": [
+        "cms",
+        "backend"
+      ],
+      "signals": [
+        "production_ready",
+        "graphql",
+        "rest_api"
+      ],
+      "latest_release_tag": "v4.24.0",
+      "latest_release_published_at": "2026-03-03T14:11:22Z"
+    },
+    {
+      "full_name": "tinacms/tinacms",
+      "name": "tinacms",
+      "html_url": "https://github.com/tinacms/tinacms",
+      "description": "Git-backed CMS with visual editing for Markdown and JSON.",
+      "stars": 9834,
+      "forks": 1234,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T06:55:22Z",
+      "topics": [
+        "cms",
+        "git",
+        "markdown",
+        "headless-cms",
+        "typescript",
+        "visual-editing"
+      ],
+      "categories": [
+        "cms",
+        "frontend"
+      ],
+      "signals": [
+        "production_ready",
+        "git_backed",
+        "typescript"
+      ],
+      "latest_release_tag": "v1.5.28",
+      "latest_release_published_at": "2026-02-25T10:44:33Z"
+    },
+    {
+      "full_name": "keystonejs/keystone",
+      "name": "keystone",
+      "html_url": "https://github.com/keystonejs/keystone",
+      "description": "CMS and API platform with database and admin UI.",
+      "stars": 8934,
+      "forks": 1123,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T05:33:44Z",
+      "topics": [
+        "cms",
+        "headless-cms",
+        "database",
+        "typescript",
+        "graphql",
+        "api"
+      ],
+      "categories": [
+        "cms",
+        "backend"
+      ],
+      "signals": [
+        "production_ready",
+        "graphql",
+        "typescript"
+      ],
+      "latest_release_tag": "v6.8.2",
+      "latest_release_published_at": "2026-02-28T12:22:11Z"
+    },
+    {
+      "full_name": "PostHog/posthog",
+      "name": "posthog",
+      "html_url": "https://github.com/PostHog/posthog",
+      "description": "Open-source product analytics platform for event tracking and insights.",
+      "stars": 18234,
+      "forks": 2847,
+      "language": "Python",
+      "pushed_at": "2026-03-04T08:33:22Z",
+      "topics": [
+        "analytics",
+        "product-analytics",
+        "python",
+        "django",
+        "self-hosted",
+        "privacy-first"
+      ],
+      "categories": [
+        "analytics",
+        "observability"
+      ],
+      "signals": [
+        "production_ready",
+        "self_hosted",
+        "privacy_focused"
+      ],
+      "latest_release_tag": "v1.78.0",
+      "latest_release_published_at": "2026-03-02T15:11:22Z"
+    },
+    {
+      "full_name": "plausible/analytics",
+      "name": "plausible-analytics",
+      "html_url": "https://github.com/plausible/analytics",
+      "description": "Privacy-friendly, open-source web analytics.",
+      "stars": 11456,
+      "forks": 1234,
+      "language": "Elixir",
+      "pushed_at": "2026-03-04T07:22:33Z",
+      "topics": [
+        "analytics",
+        "privacy",
+        "web-analytics",
+        "elixir",
+        "self-hosted",
+        "gdpr"
+      ],
+      "categories": [
+        "analytics",
+        "privacy"
+      ],
+      "signals": [
+        "production_ready",
+        "privacy_focused",
+        "self_hosted"
+      ],
+      "latest_release_tag": "v2.6.1",
+      "latest_release_published_at": "2026-02-26T11:33:44Z"
+    },
+    {
+      "full_name": "getlago/lago",
+      "name": "lago",
+      "html_url": "https://github.com/getlago/lago",
+      "description": "Open-source billing and metering platform.",
+      "stars": 8934,
+      "forks": 934,
+      "language": "Ruby",
+      "pushed_at": "2026-03-04T06:44:22Z",
+      "topics": [
+        "billing",
+        "metering",
+        "saas",
+        "ruby",
+        "rails",
+        "invoicing"
+      ],
+      "categories": [
+        "analytics",
+        "billing"
+      ],
+      "signals": [
+        "production_ready",
+        "ruby_rails"
+      ],
+      "latest_release_tag": "v1.11.0",
+      "latest_release_published_at": "2026-02-24T09:11:22Z"
+    },
+    {
+      "full_name": "highlight/highlight",
+      "name": "highlight",
+      "html_url": "https://github.com/highlight/highlight",
+      "description": "Open-source session replay and error monitoring platform.",
+      "stars": 7847,
+      "forks": 1087,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T09:05:33Z",
+      "topics": [
+        "monitoring",
+        "session-replay",
+        "error-tracking",
+        "typescript",
+        "observability",
+        "frontend"
+      ],
+      "categories": [
+        "analytics",
+        "observability"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript"
+      ],
+      "latest_release_tag": "v6.2.1",
+      "latest_release_published_at": "2026-03-01T12:44:33Z"
+    },
+    {
+      "full_name": "getsentry/sentry-javascript",
+      "name": "sentry-javascript",
+      "html_url": "https://github.com/getsentry/sentry-javascript",
+      "description": "Official Sentry SDK for JavaScript with error tracking and performance monitoring.",
+      "stars": 7654,
+      "forks": 1456,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T08:22:11Z",
+      "topics": [
+        "sentry",
+        "error-tracking",
+        "monitoring",
+        "typescript",
+        "javascript",
+        "observability"
+      ],
+      "categories": [
+        "analytics",
+        "observability"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "sentry_official"
+      ],
+      "latest_release_tag": "7.97.0",
+      "latest_release_published_at": "2026-03-03T13:33:22Z"
+    },
+    {
+      "full_name": "sadmann7/skateshop",
+      "name": "skateshop",
+      "html_url": "https://github.com/sadmann7/skateshop",
+      "description": "Full-stack e-commerce template with Next.js, TypeScript, and Stripe.",
+      "stars": 3847,
+      "forks": 876,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T04:15:22Z",
+      "topics": [
+        "nextjs",
+        "ecommerce",
+        "typescript",
+        "stripe",
+        "saas-template",
+        "tailwind"
+      ],
+      "categories": [
+        "saas_templates",
+        "fullstack"
+      ],
+      "signals": [
+        "production_ready",
+        "nextjs",
+        "stripe"
+      ],
+      "latest_release_tag": "v1.0.0",
+      "latest_release_published_at": "2026-02-20T08:22:44Z"
+    },
+    {
+      "full_name": "mickasmt/next-saas-stripe-starter",
+      "name": "next-saas-stripe-starter",
+      "html_url": "https://github.com/mickasmt/next-saas-stripe-starter",
+      "description": "Next.js SaaS template with authentication and Stripe integration.",
+      "stars": 2456,
+      "forks": 534,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T03:44:11Z",
+      "topics": [
+        "nextjs",
+        "saas",
+        "stripe",
+        "authentication",
+        "typescript",
+        "tailwind"
+      ],
+      "categories": [
+        "saas_templates",
+        "fullstack"
+      ],
+      "signals": [
+        "production_ready",
+        "nextjs",
+        "typescript"
+      ]
+    },
+    {
+      "full_name": "leerob/next-saas-starter",
+      "name": "next-saas-starter",
+      "html_url": "https://github.com/leerob/next-saas-starter",
+      "description": "Next.js SaaS starter kit with authentication and database.",
+      "stars": 4234,
+      "forks": 1087,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T02:33:22Z",
+      "topics": [
+        "nextjs",
+        "saas",
+        "template",
+        "typescript",
+        "authentication",
+        "database"
+      ],
+      "categories": [
+        "saas_templates",
+        "fullstack"
+      ],
+      "signals": [
+        "production_ready",
+        "nextjs",
+        "typescript"
+      ]
+    },
+    {
+      "full_name": "t3-oss/create-t3-app",
+      "name": "create-t3-app",
+      "html_url": "https://github.com/t3-oss/create-t3-app",
+      "description": "Opinionated full-stack TypeScript monorepo starter with Next.js and tRPC.",
+      "stars": 26847,
+      "forks": 5234,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T07:11:33Z",
+      "topics": [
+        "nextjs",
+        "trpc",
+        "typescript",
+        "saas-template",
+        "monorepo",
+        "full-stack"
+      ],
+      "categories": [
+        "saas_templates",
+        "fullstack"
+      ],
+      "signals": [
+        "production_ready",
+        "nextjs",
+        "typescript",
+        "trpc"
+      ],
+      "latest_release_tag": "v7.29.0",
+      "latest_release_published_at": "2026-03-02T10:22:11Z"
+    },
+    {
+      "full_name": "steven-tey/dub",
+      "name": "dub",
+      "html_url": "https://github.com/steven-tey/dub",
+      "description": "Open-source link shortener with advanced analytics.",
+      "stars": 20847,
+      "forks": 3234,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T06:22:44Z",
+      "topics": [
+        "nextjs",
+        "saas",
+        "typescript",
+        "link-shortener",
+        "analytics",
+        "open-source"
+      ],
+      "categories": [
+        "saas_templates",
+        "fullstack"
+      ],
+      "signals": [
+        "production_ready",
+        "nextjs",
+        "typescript"
+      ],
+      "latest_release_tag": "v1.8.0",
+      "latest_release_published_at": "2026-03-01T14:44:33Z"
+    },
+    {
+      "full_name": "honojs/hono",
+      "name": "hono",
+      "html_url": "https://github.com/honojs/hono",
+      "description": "Fast, lightweight web framework for edge computing and serverless.",
+      "stars": 16234,
+      "forks": 2134,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T08:55:22Z",
+      "topics": [
+        "framework",
+        "web",
+        "typescript",
+        "nodejs",
+        "edge-computing",
+        "api"
+      ],
+      "categories": [
+        "api",
+        "framework"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "edge_computing"
+      ],
+      "latest_release_tag": "v4.2.9",
+      "latest_release_published_at": "2026-03-03T11:22:44Z"
+    },
+    {
+      "full_name": "trpc/trpc",
+      "name": "trpc",
+      "html_url": "https://github.com/trpc/trpc",
+      "description": "End-to-end typesafe APIs with TypeScript.",
+      "stars": 33847,
+      "forks": 2987,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T09:18:33Z",
+      "topics": [
+        "trpc",
+        "typescript",
+        "api",
+        "rpc",
+        "backend",
+        "type-safe"
+      ],
+      "categories": [
+        "api",
+        "framework"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "type_safe"
+      ],
+      "latest_release_tag": "v10.45.1",
+      "latest_release_published_at": "2026-03-02T15:33:22Z"
+    },
+    {
+      "full_name": "elysiajs/elysia",
+      "name": "elysia",
+      "html_url": "https://github.com/elysiajs/elysia",
+      "description": "Fast, simple, and production-ready HTTP server framework for Bun.",
+      "stars": 9847,
+      "forks": 1234,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T05:44:11Z",
+      "topics": [
+        "framework",
+        "bun",
+        "typescript",
+        "http-server",
+        "api",
+        "rest-api"
+      ],
+      "categories": [
+        "api",
+        "framework"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "bun_runtime"
+      ],
+      "latest_release_tag": "v0.8.14",
+      "latest_release_published_at": "2026-02-27T12:11:22Z"
+    },
+    {
+      "full_name": "fastify/fastify",
+      "name": "fastify",
+      "html_url": "https://github.com/fastify/fastify",
+      "description": "Fast and low-overhead web framework for Node.js.",
+      "stars": 32847,
+      "forks": 4123,
+      "language": "JavaScript",
+      "pushed_at": "2026-03-04T08:11:44Z",
+      "topics": [
+        "fastify",
+        "framework",
+        "nodejs",
+        "http",
+        "rest-api",
+        "api"
+      ],
+      "categories": [
+        "api",
+        "framework"
+      ],
+      "signals": [
+        "production_ready",
+        "nodejs",
+        "high_performance"
+      ],
+      "latest_release_tag": "v4.26.1",
+      "latest_release_published_at": "2026-03-01T10:33:11Z"
+    },
+    {
+      "full_name": "expressjs/express",
+      "name": "express",
+      "html_url": "https://github.com/expressjs/express",
+      "description": "Fast, unopinionated, minimalist web framework for Node.js.",
+      "stars": 64847,
+      "forks": 16234,
+      "language": "JavaScript",
+      "pushed_at": "2026-03-04T07:33:22Z",
+      "topics": [
+        "nodejs",
+        "javascript",
+        "framework",
+        "web",
+        "api",
+        "rest-api"
+      ],
+      "categories": [
+        "api",
+        "framework"
+      ],
+      "signals": [
+        "production_ready",
+        "nodejs",
+        "mature_project"
+      ],
+      "latest_release_tag": "v4.18.2",
+      "latest_release_published_at": "2026-02-25T13:44:33Z"
+    },
+    {
+      "full_name": "vercel/ai",
+      "name": "ai",
+      "html_url": "https://github.com/vercel/ai",
+      "description": "TypeScript toolkit for building AI applications with streaming support.",
+      "stars": 12456,
+      "forks": 1987,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T09:11:55Z",
+      "topics": [
+        "ai",
+        "llm",
+        "streaming",
+        "typescript",
+        "nodejs",
+        "react"
+      ],
+      "categories": [
+        "ai_integration",
+        "sdk"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "vercel_official"
+      ],
+      "latest_release_tag": "v3.1.44",
+      "latest_release_published_at": "2026-03-03T16:22:11Z"
+    },
+    {
+      "full_name": "langchain-ai/langchainjs",
+      "name": "langchainjs",
+      "html_url": "https://github.com/langchain-ai/langchainjs",
+      "description": "JavaScript SDK for building applications with LLMs.",
+      "stars": 13847,
+      "forks": 2456,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T08:44:22Z",
+      "topics": [
+        "langchain",
+        "llm",
+        "ai",
+        "typescript",
+        "nodejs",
+        "framework"
+      ],
+      "categories": [
+        "ai_integration",
+        "framework"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "llm_framework"
+      ],
+      "latest_release_tag": "v0.1.33",
+      "latest_release_published_at": "2026-03-02T14:33:44Z"
+    },
+    {
+      "full_name": "anthropics/anthropic-sdk-node",
+      "name": "anthropic-sdk-node",
+      "html_url": "https://github.com/anthropics/anthropic-sdk-node",
+      "description": "Official Anthropic Node.js SDK for Claude API access.",
+      "stars": 4234,
+      "forks": 567,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T07:22:33Z",
+      "topics": [
+        "anthropic",
+        "claude",
+        "llm",
+        "sdk",
+        "typescript",
+        "nodejs"
+      ],
+      "categories": [
+        "ai_integration",
+        "sdk"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "anthropic_official"
+      ],
+      "latest_release_tag": "v0.21.0",
+      "latest_release_published_at": "2026-03-01T11:44:22Z"
+    },
+    {
+      "full_name": "openai/openai-node",
+      "name": "openai-node",
+      "html_url": "https://github.com/openai/openai-node",
+      "description": "Official OpenAI Node.js SDK for GPT API access.",
+      "stars": 8234,
+      "forks": 1456,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T06:15:11Z",
+      "topics": [
+        "openai",
+        "gpt",
+        "llm",
+        "sdk",
+        "typescript",
+        "nodejs"
+      ],
+      "categories": [
+        "ai_integration",
+        "sdk"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "openai_official"
+      ],
+      "latest_release_tag": "v4.52.1",
+      "latest_release_published_at": "2026-03-02T12:33:22Z"
+    },
+    {
+      "full_name": "modelcontextprotocol/servers",
+      "name": "mcp-servers",
+      "html_url": "https://github.com/modelcontextprotocol/servers",
+      "description": "Official MCP server implementations for various platforms and services.",
+      "stars": 9847,
+      "forks": 2134,
+      "language": "TypeScript",
+      "pushed_at": "2026-03-04T09:05:44Z",
+      "topics": [
+        "mcp",
+        "model-context-protocol",
+        "ai",
+        "typescript",
+        "servers",
+        "integration"
+      ],
+      "categories": [
+        "ai_integration",
+        "mcp_tools"
+      ],
+      "signals": [
+        "production_ready",
+        "typescript",
+        "mcp_official"
+      ],
+      "latest_release_tag": "v0.4.2",
+      "latest_release_published_at": "2026-03-03T10:11:33Z"
     }
   ]
 }

@@ -146,7 +146,7 @@ macOS shortcut: double-click `launch.command`.
 ## Example: Magic Run
 
 ```bash
-curl -X POST http://localhost:3030/api/v1/masterpiece/magic-run \
+curl -X POST http://localhost:3000/api/v1/masterpiece/magic-run \
   -H 'Content-Type: application/json' \
   -H 'x-api-key: local-dev-key' \
   -d '{
@@ -176,7 +176,7 @@ Expected response highlights:
 Use this to generate the production finishing system (quality architecture + human-like E2E + UX loop + release gate + repo coverage) with benchmarked OSS exemplars:
 
 ```bash
-curl -X POST http://localhost:3030/api/v1/masterpiece/finish/run \
+curl -X POST http://localhost:3000/api/v1/masterpiece/finish/run \
   -H 'Content-Type: application/json' \
   -H 'x-api-key: local-dev-key' \
   -d '{
@@ -216,7 +216,7 @@ Expected output highlights:
 Use this to inspect what the builder currently treats as the highest-frequency break patterns from real repo completion runs:
 
 ```bash
-curl -X GET http://localhost:3030/api/v1/index/gap-hotspots \
+curl -X GET http://localhost:3000/api/v1/index/gap-hotspots \
   -H 'x-api-key: local-dev-key'
 ```
 
@@ -230,7 +230,7 @@ Expected output highlights:
 Use this to validate and improve actual repos (not just plan generation):
 
 ```bash
-curl -X POST http://localhost:3030/api/v1/masterpiece/pipeline/run \
+curl -X POST http://localhost:3000/api/v1/masterpiece/pipeline/run \
   -H 'Content-Type: application/json' \
   -H 'x-api-key: local-dev-key' \
   -d '{

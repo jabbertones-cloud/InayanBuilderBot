@@ -16,6 +16,7 @@ InayanBuilderBot is the **builder product** in the Index + Inayan Builder Loop. 
 - **Research fusion:** `POST /api/v1/research/fusion` — combine Reddit + GitHub into a single research output (magic-run input).
   - Optional deterministic selectors: `pipelineRunId`, `benchmarkRunId`, `githubRunId`, `redditRunId`, `githubQuery`, `redditQuery` (set `useLatestRuns=false`).
 - **Magic run:** `POST /api/v1/masterpiece/magic-run` — Scout → Benchmark → Blueprint → Execution Task List.
+- **Video bootstrap:** `POST /api/v1/content/video-bootstrap` — derive automated content workflow plans from indexed tutorial videos.
 - **Health:** `GET /health` — liveness for dashboards.
 
 ### Environment
@@ -28,7 +29,7 @@ InayanBuilderBot is the **builder product** in the Index + Inayan Builder Loop. 
 
 ### How claw-architect calls InayanBuilderBot
 
-- **Reddit research:** `npm run reddit:search` in claw-architect uses its own script; for InayanBuilderBot-backed research, POST to `http://<host>:3030/api/v1/reddit/search` (or use builder-research-agenda outputs as input).
+- **Reddit research:** `npm run reddit:search` in claw-architect uses its own script; for InayanBuilderBot-backed research, POST to `http://<host>:3000/api/v1/reddit/search` (or use builder-research-agenda outputs as input).
 - **Builder gap pulse:** Does not automatically call InayanBuilderBot; it queues repo_autofix and opencode_controller for repos with gaps. InayanBuilderBot is a priority repo and is benchmarked via `repo:completion:gap --repo InayanBuilderBot`.
 
 ## Pipeline: Video → index → brief → research → benchmark → InayanBuilderBot
@@ -76,5 +77,5 @@ npm run dev:auto
 
 - **Reddit/GitHub 4xx:** Check env (REDDIT_*, GITHUB_TOKEN); use optional OAuth or tokens.
 - **Health failing:** Ensure SQLite/DB and required env are set; see INSTALLATION.md.
-- **Mission Control not reaching InayanBuilderBot:** Ensure InayanBuilderBot is running (e.g. port 3030) and CORS/network allow requests from Mission Control host.
+- **Mission Control not reaching InayanBuilderBot:** Ensure InayanBuilderBot is running on port 3000: `cd /Users/scottmanthey/claw-repos/InayanBuilderBot && npm run start:auto`. Set `INAYAN_BUILDER_API_URL=http://127.0.0.1:3000` for MCP/agent clients, and keep CORS/network open for Mission Control host.
 - **Fusion result drift between runs:** use deterministic fusion selectors with fixed run IDs (and persist the selected IDs in your run notes).
