@@ -1,66 +1,129 @@
 {
-  "timestamp": "2026-03-22T00:49:59.228Z",
+  "timestamp": "2026-04-09T09:15:01.243Z",
   "mode": "fast",
-  "repo": "InayanBuilderBot",
-  "total_duration_ms": 11516,
+  "total_duration_ms": 2086,
   "overall_status": "FAIL",
   "layers": [
     {
-      "layer": "lint",
-      "status": "pass",
-      "duration_ms": 245,
+      "layer": "static",
+      "status": "skip",
+      "duration_ms": 9,
       "findings": 0,
       "critical": 0,
-      "details": "Exit code 0."
+      "details": "Semgrep not installed. Run: pip install semgrep"
     },
     {
       "layer": "unit",
-      "status": "pass",
-      "duration_ms": 5263,
-      "findings": 0,
-      "critical": 0,
-      "details": "0 passed, 0 failed. Exit code 0."
-    },
-    {
-      "layer": "e2e",
       "status": "fail",
-      "duration_ms": 5380,
+      "duration_ms": 2045,
       "findings": 4,
       "critical": 4,
       "details": "0 passed, 4 failed. Exit code 1."
     },
     {
-      "layer": "security",
-      "status": "pass",
-      "duration_ms": 254,
+      "layer": "property",
+      "status": "skip",
+      "duration_ms": 0,
       "findings": 0,
       "critical": 0,
-      "details": "Exit code 0."
+      "details": "Property test directory not found."
     },
     {
-      "layer": "claw:security",
+      "layer": "determinism",
+      "status": "skip",
+      "duration_ms": 13,
+      "findings": 0,
+      "critical": 0,
+      "details": "Server not running on port 3000. Start with: npm start"
+    },
+    {
+      "layer": "e2e",
+      "status": "skip",
+      "duration_ms": 0,
+      "findings": 0,
+      "critical": 0,
+      "details": "App not built. Run: npm run build"
+    },
+    {
+      "layer": "latency",
+      "status": "skip",
+      "duration_ms": 10,
+      "findings": 0,
+      "critical": 0,
+      "details": "Server not running on port 3000."
+    },
+    {
+      "layer": "load",
+      "status": "skip",
+      "duration_ms": 0,
+      "findings": 0,
+      "critical": 0,
+      "details": "Skipped (--fast mode)."
+    },
+    {
+      "layer": "ai-explorer",
+      "status": "skip",
+      "duration_ms": 0,
+      "findings": 0,
+      "critical": 0,
+      "details": "Skipped (--fast mode)."
+    },
+    {
+      "layer": "prod-readiness",
+      "status": "pass",
+      "duration_ms": 1,
+      "findings": 0,
+      "critical": 0,
+      "details": "Production readiness: 100% (12/12). All checks pass."
+    },
+    {
+      "layer": "runaway-detection",
+      "status": "fail",
+      "duration_ms": 2,
+      "findings": 18,
+      "critical": 1,
+      "details": "18 patterns found (1 critical). src/index.js:60 — retry pattern (verify has max cap); src/index.js:81 — retry pattern (verify has max cap); src/index.js:81 — retry pattern (verify has max cap)"
+    },
+    {
+      "layer": "sandbox-escape",
       "status": "warn",
-      "duration_ms": 187,
-      "findings": 0,
+      "duration_ms": 2,
+      "findings": 1,
       "critical": 0,
-      "details": "Exit code 1. 0 critical."
+      "details": "Containment: 88% (7/8). Gaps: network_restriction"
     },
     {
-      "layer": "claw:baseline",
-      "status": "pass",
-      "duration_ms": 185,
+      "layer": "cost-regression",
+      "status": "warn",
+      "duration_ms": 1,
+      "findings": 2,
+      "critical": 1,
+      "details": "2 regressions: Findings regression: 4 findings (was 0, +4); Critical regression: 4 criticals (was 0, +4)"
+    },
+    {
+      "layer": "observability",
+      "status": "warn",
+      "duration_ms": 0,
+      "findings": 6,
+      "critical": 0,
+      "details": "Missing observability files: tracing.ts, metrics.ts, logger.ts, health-check.ts, qa-diagnostics.ts, index.ts"
+    },
+    {
+      "layer": "community-qa",
+      "status": "skip",
+      "duration_ms": 0,
       "findings": 0,
       "critical": 0,
-      "details": "Exit code 0."
+      "details": "Skipped (--fast mode)."
     }
   ],
   "summary": {
-    "total_layers": 6,
-    "passed": 4,
-    "failed": 1,
-    "warned": 1,
-    "skipped": 0,
-    "total_findings": 4,
-    "total_critical": 4
+    "total_layers": 14,
+    "passed": 1,
+    "failed": 2,
+    "warned": 3,
+    "skipped": 8,
+    "total_findings": 31,
+    "total_critical": 6
   }
 }

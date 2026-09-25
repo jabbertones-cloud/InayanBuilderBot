@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export npm_config_cache="${npm_config_cache:-$ROOT_DIR/.npm-mcp-cache}"
+export NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-$npm_config_cache}"
 if [[ -f "$ROOT_DIR/.env" ]]; then
   set -a
   # shellcheck disable=SC1090
@@ -43,4 +45,4 @@ fi
 PASS_ENC="$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$PASS")"
 URI="postgresql://${USER}:${PASS_ENC}@${HOST}:${PORT}/${DB}"
 
-exec npx -y @modelcontextprotocol/server-postgres "$URI"
+exec npm exec --yes --package=@modelcontextprotocol/server-postgres@0.6.2 -- mcp-server-postgres "$URI"

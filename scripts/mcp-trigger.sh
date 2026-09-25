@@ -14,8 +14,13 @@ if [[ "${1:-}" == "--healthcheck" ]]; then
     echo "[mcp-trigger] npx missing" >&2
     exit 1
   fi
-  echo "[mcp-trigger] ok (npx available)"
+  NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-$ROOT_DIR/.npm-mcp-cache}" \
+    npm_config_cache="${npm_config_cache:-$ROOT_DIR/.npm-mcp-cache}" \
+    npm exec --yes --package=trigger.dev@4.4.6 -- trigger mcp --help >/dev/null
+  echo "[mcp-trigger] ok (trigger.dev mcp available)"
   exit 0
 fi
 
-exec npx trigger.dev@4.4.1 mcp
+export npm_config_cache="${npm_config_cache:-$ROOT_DIR/.npm-mcp-cache}"
+export NPM_CONFIG_CACHE="${NPM_CONFIG_CACHE:-$npm_config_cache}"
+exec npm exec --yes --package=trigger.dev@4.4.6 -- trigger mcp
